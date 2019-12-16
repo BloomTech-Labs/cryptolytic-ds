@@ -55,6 +55,7 @@ def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick = candlestick.copy()
     candelstick['timestamp'] = timestamp
+
     if api=='poloniex':
         pass
     elif api=='coincap':
