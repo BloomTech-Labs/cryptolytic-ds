@@ -1,0 +1,10 @@
+- Make functions to create tables in sql
+- Start saving the appropriate exchanges to csv files to put in the database later
+- Make a function to take candle data and put it in the database by exchange
+- Make a function which gets the range of candles (which should just be min and max of time stamp, don't allow for skips in that).
+- On AWS Lambda, put a script to update the database from the apis and to log when there is a problem. 
+    - Maybe just copy the original script
+    - Look at old code for an idea of how the lambda needs to look
+- Provide RDS credentials to team
+- Make beanstalk part
+- Provide API

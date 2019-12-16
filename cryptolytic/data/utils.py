@@ -147,3 +147,7 @@ def drop_column(credentials):
     
     print("Column removed.")
     conn.close()
+
+
+# Utilities Involing dates
+def datetime
