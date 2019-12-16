@@ -1,0 +1,43 @@
+[
+        {
+            "id" : "cryptowatch",
+            "api_call" :"https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
+            "exchanges" : {},
+            "exchange_pairs" : ["btc_eth", "eth_btc", "btc_usd"]
+        },
+        {
+            "id" : "poloniex",
+            "api_call" : "https://poloniex.com/public?command=returnChartData&currencyPair={trading_pair}&start={start}&end={end}&period={period}",
+            "exchanges" : {
+                "poloniex" : {
+                    "exchange_pairs" : ["btc_eth", "eth_btc", "btc_usd"]
+                }
+            },
+        },  {
+            "id" : "coincap",
+            "api_call" :"http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
+            "exchanges" : {
+                "coincap" : {
+                    "exchange_pairs" : ["btc_eth", "eth_btc", "btc_usd"]
+                }
+            },
+        },
+        {
+            "id" : "hitbitc",
+            "api_call" :"https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
+            "exchanges" : {
+                "hitbtc" : {
+                    "exchange_pairs" : ["btc_eth", "eth_btc", "btc_usd"]
+                }
+            },
+        },
+        {
+            "id" : "bitfinex",
+            "api_call" : "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?limit={limit}&sort=-1",
+            "exchanges" : {
+                "bitfinex" : {
+                    "exchange_pairs" : ["btc_eth", "eth_btc", "btc_usd"]
+                }
+            },
+        }
+]
