@@ -13,6 +13,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
+
 # Json conversion dictionary for cryptocurrency abbreviations
 crypto_name_table = None
 with open('data/cryptocurrencies.json', 'r') as f:
@@ -59,6 +60,8 @@ def trading_pair_info(api, x):
 
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
+    print(api)
+    print(candlestick)
     candlestick = candlestick.copy()
     candlestick['timestamp'] = timestamp
 
@@ -111,7 +114,7 @@ def format_apiurl(api, params={}):
         params['end'] *= 1000
     # Standard URL query
     if api in {'cryptowatch', 'poloniex', 'coincap', 'hitbtc', 'bitfinex'}:
-        url = api_calls[api].format(**params)
+        url = api_info[api]['api_call'].format(**params)
     # Hasn't been verified
     else:
         raise Exception('API not supported', api)
@@ -145,9 +148,9 @@ def get_time_interval(api, period):
         }
     }.get(api)
 
+
     if accepted_values == None:
         raise Exception('API not supported', api)
-
     elif weeks >= 1 and accepted_values.has('weeks'):
         x = list(filter(lambda x: x<hours, accepted_values['weeks']))
         interval = 'w'+str(np.max(x))
@@ -187,9 +190,6 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     """period : candlestick length in seconds. Default 4 hour period.
        interval : time interval, either unix or %d-%m-%Y format
     """
-    # Check some things
-    assert exchange in exchanges
-
     if api in {'cryptowatch'} and apikey==None:
         raise Exception('Missing API key')
 
@@ -265,12 +265,24 @@ def collect_data():
                 apikey=os.getenv(apikey))
     
 def live_update():
+    start = int(time.time() - 86400) # one day is 86400 seconds
+    end = int(time.time()) # current time
     for api, api_data in api_info.items():
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
-            print(api)
-            print(api_exchanges)
-            print(exchange_data['trading_pairs'])
+            for trading_pair in exchange_data['trading_pairs']:
+                candle_info = (
+                    get_from_api(
+                        api=api,
+                        exchange=exchange_id,
+                        trading_pair=trading_pair,
+                        period=300,
+                        interval=[start, end]))
+
+                print(candle_info)
+                # TODO, update dataframe with candle info and save that 
+                # later to a csv
+                return # TODO  remove
 
 def test_get_candles():
     start = '01-01-2019'
