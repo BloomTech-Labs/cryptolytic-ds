@@ -265,6 +265,7 @@ def collect_data():
                 apikey=os.getenv(apikey))
     
 def live_update():
+    # TODO get the missing candle stick
     start = int(time.time() - 86400) # one day is 86400 seconds
     end = int(time.time()) # current time
     for api, api_data in api_info.items():
