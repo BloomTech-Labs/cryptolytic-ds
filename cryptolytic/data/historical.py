@@ -11,12 +11,18 @@ import requests
 import json
 import datetime
 import numpy as np
+import pandas as pd
 
 # Json conversion dictionary for cryptocurrency abbreviations
 crypto_name_table = None
 with open('data/cryptocurrencies.json', 'r') as f:
     crypto_name_table = json.load(f)
 assert crypto_name_table.keys()
+
+api_info = None
+with open('data/api_info.json', 'r') as f:
+    api_info = json.load(f)
+assert len(api_info) > 1
 
 # TODO consider putting into a more general file
 def crypto_full_name(crypto_short):
@@ -54,7 +60,7 @@ def trading_pair_info(api, x):
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick = candlestick.copy()
-    candelstick['timestamp'] = timestamp
+    candlestick['timestamp'] = timestamp
 
     if api=='poloniex':
         pass
@@ -259,8 +265,12 @@ def collect_data():
                 apikey=os.getenv(apikey))
     
 def live_update():
-    
-    pass
+    for api, api_data in api_info.items():
+        api_exchanges = api_data['exchanges']
+        for exchange_id, exchange_data in api_exchanges.items():
+            print(api)
+            print(api_exchanges)
+            print(exchange_data['trading_pairs'])
 
 def test_get_candles():
     start = '01-01-2019'
