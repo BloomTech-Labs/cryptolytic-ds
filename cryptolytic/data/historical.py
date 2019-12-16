@@ -3,7 +3,6 @@
     Fully Implemented: Cryptowatch, Poloniex, CoinAPI
 
 """
-from cryptolytic.info import *
 import requests
 from cryptolytic.util import date
 import time
@@ -57,7 +56,9 @@ def convert_candlestick(candlestick, api, timestamp):
     candlestick = candlestick.copy()
     candelstick['timestamp'] = timestamp
     if api=='poloniex':
+        pass
     elif api=='coincap':
+        pass
 #        candlestick['quoteVolume'] = -1 # Unknown quote volume
     elif api=='cryptowatch':
         candlestick = {
@@ -93,14 +94,6 @@ def convert_candlestick(candlestick, api, timestamp):
 # take
 # coincap intervals: m1, m5, m15, m30, h1, h2, h4, h8, h12, d1, w1
 # associate them with num
-api_calls = (
-     # cryptowatch has a limit, I believe it's probably high enough but have to be careful not to go over the limit of 5gb unless want to pay
-     dict(cryptowatch="https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
-          poloniex="https://poloniex.com/public?command=returnChartData&currencyPair={trading_pair}&start={start}&end={end}&period={period}",
-          coincap="http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
-          hitbtc="https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
-          bitfinex="https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?limit={limit}&sort=-1"
-         ))
 
 def format_apiurl(api, params={}):
     url = None
@@ -189,7 +182,6 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     """
     # Check some things
     assert exchange in exchanges
-    assert trading_pair in trading_pairs
 
     if api in {'cryptowatch'} and apikey==None:
         raise Exception('Missing API key')
@@ -199,8 +191,8 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     baseId = pair_info.get('baseId') # the first coin in the pair
     quoteId = pair_info.get('quoteId') # the second coin in the pair
     trading_pair = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
-    start = date.convert_datetime(interval[0])
-    end = date.convert_datetime(interval[1])
+    start = date.convert_datetime(interval[0]) # start time unix timestamp
+    end = date.convert_datetime(interval[1])  # end time unix timestamp
     limit=100 # 100 limit by default, should change depending on the API later.
     assert start < end
 
@@ -258,27 +250,16 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
          period = str(datetime.timedelta(seconds=period)))
 
 def collect_data():
-    dict(cryptowatch="https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
-          poloniex="https://poloniex.com/public?command=returnChartData&currencyPair={trading_pair}&start={start}&end={end}&period={period}",
-          coincap="http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
-          hitbtc="https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
-          bitfinex="http")
-    
-    api_info = dict(
-        cryptowatch={
-            
-        }
-                    poloniex=,
-                    coincap=,
-                    hitbtc=,
-                    bitfinex=)
-    
     get_from_api(api=api,
                 exchange=exchange,
                 trading_pair = trading_pair,
                 period=period,
                 interval=[start, end],
                 apikey=os.getenv(apikey))
+    
+def live_update():
+    
+    pass
 
 def test_get_candles():
     start = '01-01-2019'
