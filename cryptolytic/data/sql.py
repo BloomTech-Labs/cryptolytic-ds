@@ -68,9 +68,12 @@ def check_candle_table():
 
 
 def add_candle_data_to_table():
+
+    # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
 
+    # write the query
     query = """INSERT INTO candlesticks(
         api,
         exchange,
@@ -84,5 +87,6 @@ def add_candle_data_to_table():
     )
             """
 
+    # execute and commit the query
     cur.execute(query)
     conn.commit()
