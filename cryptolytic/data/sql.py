@@ -77,26 +77,21 @@ def check_candle_table():
     results = cur.fetchall()
     print(results)
     
-def add_candle_data_to_table2(dfdata, cur):
+def add_candle_data_to_table2(df, cur):
     """
         Builds a string from our data-set using the mogrify method which is then called once using the execute method
     """
-    query ="%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s" 
-    args_str = (','.join(
-                cursor.mogrify(query, 
-                                       {
-                                        'api': dfdata['api'],
-                                        'exchange': dfdata['exchange'],
-                                        'trading_pair': dfdata['trading_pair'],
-                                        'timestamp': str(dfdata['timestamp']),
-                                        'open': dfdata['open'],
-                                        'close': dfdata['close'],
-                                        'high': dfdata['high'],
-                                        'low': dfdata['low'],
-                                        'volume': dfdata['volume']
-                                        })))
+    query ="(%s, %s, %s, %s, %s, %s, %s, %s, %s)" 
+    order = ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume']
+    df['timestamp'] = df['timestamp'].apply(str)
+    print(df[order].values[0])
+
+    x = [str(cur.mogrify(query, row), encoding='utf-8') for row in df[order].values]
+    print(x[0])
+    args_str = ','.join(x)
+    print(args_str)
     try:
-        cur.execute("INSERT INTO {table} VALUES".format(table=TABLE_NAME) + args_str)    
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str)    
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -113,15 +108,15 @@ def add_candle_data_to_table(dfdata, conn):
         cur.execute(
             query,
             {
-                'api': dfdata['api'],
-                'exchange': dfdata['exchange'],
-                'trading_pair': dfdata['trading_pair'],
-                'timestamp': str(dfdata['timestamp']),
-                'open': dfdata['open'],
-                'close': dfdata['close'],
-                'high': dfdata['high'],
-                'low': dfdata['low'],
-                'volume': dfdata['volume']
+                'api': dfdata['api'].values(),
+                'exchange': dfdata['exchange'].values(),
+                'trading_pair': dfdata['trading_pair'].values(),
+                'timestamp': str(dfdata['timestamp'].values()),
+                'open': dfdata['open'].values(),
+                'close': dfdata['close'].values(),
+                'high': dfdata['high'].values(),
+                'low': dfdata['low'].values(),
+                'volume': dfdata['volume'].values()
             }
     )
     except ps.OperationalError as e:
@@ -181,8 +176,14 @@ def get_some_candles(n=100):
         sql_error(e)
         return
 
-def candlestick_to_sql(data):
+def candlestick_to_sql(data, table_name):
     conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
     dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
-    add_candle_data_to_table2(dfdata, conn)
+<<<<<<< HEAD
+    add_candle_data_to_table2(dfdata, cur, table_name=table_name)
     conn.commit()
+=======
+    add_candle_data_to_table2(dfdata, cur)
+    conn.commit()
+>>>>>>> 553fe0ebdd09994f2c6a982e0afb5e5c94fc99c2
