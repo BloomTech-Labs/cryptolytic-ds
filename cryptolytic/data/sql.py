@@ -123,3 +123,9 @@ def get_latest_date(exchange_id, trading_pair):
         sql_error(e)
         return
     return latest_date or 1546300800 
+
+
+def candlestick_to_sql(data, trading_pair='eth_btc'):
+    dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
+    for data in range(len(dfdata)):
+        add_candle_data_to_table(dfdata.iloc[data], trading_pair=trading_pair)

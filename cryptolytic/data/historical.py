@@ -5,7 +5,7 @@
 """
 import requests
 from cryptolytic.util import date
-from cryptolytics.data import sql
+from cryptolytic.data import sql
 import time
 import os
 import requests
@@ -290,7 +290,7 @@ def live_update():
                 # Make an obvious error message if there is an issue for now
                 if candle_info['start'] < candle_info['end']:
                     print('Start is less than end!')
-                    print(f"Candles collected {candle_info['candles_collected']}"")
+                    print(f"Candles collected {candle_info['candles_collected']}")
                     print('-----------')
                     print(api, exchange_id, trading_pair, candle_info['start'], candle_info['end'])
                 
