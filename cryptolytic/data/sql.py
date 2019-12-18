@@ -82,8 +82,7 @@ def add_candle_data_to_table2(d, cur):
         Builds a string from our data-set using the mogrify method which is then called once using the execute method
     """
     query ="%(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s)" 
-    thing = list(map(lambda x: d[x].values, ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume']))
-    args_str = (','.join(cur.mogrify(query, thing)))
+    args_str = (',', cur.mogrify(query, x) for x in map(lambda x: d[x].values, ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume']))
     try:
         cur.execute("INSERT INTO {table} VALUES".format(table=TABLE_NAME) + args_str)    
     except ps.OperationalError as e:
