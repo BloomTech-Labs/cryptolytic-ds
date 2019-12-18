@@ -176,9 +176,14 @@ def get_some_candles(n=100):
         sql_error(e)
         return
 
-def candlestick_to_sql(data):
+def candlestick_to_sql(data, table_name):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
+<<<<<<< HEAD
+    add_candle_data_to_table2(dfdata, cur, table_name=table_name)
+    conn.commit()
+=======
     add_candle_data_to_table2(dfdata, cur)
     conn.commit()
+>>>>>>> 553fe0ebdd09994f2c6a982e0afb5e5c94fc99c2
