@@ -23,12 +23,9 @@ def sql_error(error):
     print(f"Error Code: {e.pgcode}\n")
 
 def check_tables():
-    print("hey")
     creds = get_credentials()
-    print(creds)
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-    print("hey2")
     query = """SELECT * FROM pg_catalog.pg_tables
                WHERE schemaname != 'pg_catalog'
                AND schemaname != 'information_schema';"""
@@ -59,7 +56,39 @@ def create_candle_table():
         sql_error(e)
         return
     conn.commit()
+    
 
+def create_candle_table():
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = """CREATE TABLE candlesticks 
+                (api text not null,
+                 exchange text not null,
+                 trading_pair text not null,
+                 timestamp bigint not null,
+                 open numeric not null,
+                 close numeric not null,
+                 high numeric not null,
+                 low numeric not null,
+                 volume bigint not null);"""
+    try:
+        cur.execute(query)
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+    conn.commit()
+
+
+def drop_candle_table():
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = """DROP TABLE IF EXISTS candlesticks;"""
+    try:
+        cur.execute(query)
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+    conn.commit()
 
 def check_candle_table():
     conn = ps.connect(**get_credentials())
@@ -123,6 +152,24 @@ def get_latest_date(exchange_id, trading_pair):
         sql_error(e)
         return
     return latest_date or 1546300800 
+
+def get_some_candles(n=100):
+    """
+        Return some candles
+    """
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = f"""
+        SELECT * FROM candlesticks
+        LIMIT {n};
+    """
+    latest_date = None
+    try:
+        results = cur.execute(query)
+        return results.fetchall()
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
 
 
 def candlestick_to_sql(data, trading_pair='eth_btc'):
