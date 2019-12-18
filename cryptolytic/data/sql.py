@@ -71,43 +71,37 @@ def check_candle_table():
     print(results)
 
 
-def add_candle_data_to_table():
+def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
 
     # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-    mydict = historical.get_from_api(api = 'bitfinex', exchange='bitfinex', trading_pair='eth_btc', interval=[(time.time()-100000), time.time()])
     
-    # df = pd.DataFrame.from_dict(df)
-    # query = """INSERT INTO candlesticks(
-    #     api,
-    #     exchange,
-    #     trading_pair,
-    #     timestamp,
-    #     open,
-    #     close,
-    #     high,
-    #     low,
-    #     volume
-    # )
-    #         """ + str(df[1:]) + ';'
+    query = """
+        INSERT INTO candlesticks(api, exchange, trading_pair, timestamp, open, close, high, low, volume)
+        VALUES (%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s);
+    """
+    try:
+        cur.execute(
+        query,
+        {
+            'api': dfdata['api'],
+            'exchange': dfdata['exchange'],
+            'trading_pair': str(trading_pair),
+            'timestamp': dfdata['timestamp'],
+            'open': dfdata['open'],
+            'close': dfdata['close'],
+            'high': dfdata['high'],
+            'low': dfdata['low'],
+            'volume': dfdata['volume']
+        }
+    )
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+      
+    conn.commit()
 
-    mydict = pd.io.json.json_normalize(mydict, sep='_')
-    myDict = mydict.to_dict()
-
-    # myDict = pd.DataFrame.from_dict(mydict)
-    # myDict = myDict.to_dict()
-
-    placeholders = ', '.join(['%s'] * len(myDict))
-    columns = ', '.join(myDict.keys())
-    sql = "INSERT INTO candlesticks ( %s ) VALUES ( %s )" % (columns, placeholders)
-    myDict = list(myDict.values())
-    cur.execute(sql, myDict)
-
-
-    # # execute and commit the query
-    # cur.execute(query)
-    # conn.commit()
 
 def get_latest_date(exchange_id, trading_pair):
     """
