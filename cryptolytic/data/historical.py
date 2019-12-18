@@ -5,7 +5,7 @@
 """
 import requests
 from cryptolytic.util import date
-from cryptolytics.data import sql
+from cryptolytic.data import sql
 import time
 import os
 import requests
@@ -40,7 +40,7 @@ def crypto_full_name(crypto_short):
 
 def trading_pair_info(api, x):
     """Returns full info for the trading pair necessary for the exchange.
-    x: btc_eth or something. Probably should be a vector actually like ["eth" "btc"] instead.
+    x: e.g. btc_eth
     """
     # btcheth style trading pairs
     baseId, quoteId = x.split('_')
@@ -65,8 +65,6 @@ def trading_pair_info(api, x):
 
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
-    print(api)
-    print(candlestick)
     candlestick = candlestick.copy()
     
 
@@ -158,10 +156,10 @@ def get_time_interval(api, period):
     if accepted_values == None:
         raise Exception('API not supported', api)
     elif weeks >= 1 and accepted_values.has('weeks'):
-        x = list(filter(lambda x: x<hours, accepted_values['weeks']))
+        x = list(filter(lambda x: x<weeks, accepted_values['weeks']))
         interval = 'w'+str(np.max(x))
     elif days >= 1:
-        x = list(filter(lambda x: x<hours, accepted_values['days']))
+        x = list(filter(lambda x: x<days, accepted_values['days']))
         interval = 'd'+str(np.max(x))
     elif hours >= 1:
         x = list(filter(lambda x: x<hours, accepted_values['hours']))
@@ -174,7 +172,6 @@ def get_time_interval(api, period):
     if api in {'hitbtc'}:
         interval = interval.upper()
     if api in {'bitfinex'}: # expect 1m format instead
-        print('oetnsuh')
         interval = interval[1:] + interval[0]
 
     return interval
@@ -191,7 +188,7 @@ def conform_json_response(api, json_response):
         raise Exception('API not supported', api)
     return None
 
-def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
+def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
                  period=14400, interval=None, apikey=None):
     """period : candlestick length in seconds. Default 4 hour period.
        interval : time interval, either unix or %d-%m-%Y format
@@ -206,11 +203,12 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     trading_pair = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
     start = date.convert_datetime(interval[0]) # start time unix timestamp
     end = date.convert_datetime(interval[1])  # end time unix timestamp
-    limit=100 # 100 limit by default, should change depending on the API later.
+    limit=100 # 100 limit by default, should change depending on the API later, by adding the limit information in data/api_info.json
     assert start < end
 
+    # parameters for the url to get candle data from
     urlparams = dict(exchange=exchange, trading_pair=trading_pair, apikey=apikey,
-                     period=period, end=end, baseId=baseId, quoteId=quoteId,
+                     period=period, end=start+(limit*period), baseId=baseId, quoteId=quoteId,
                      limit=limit)
 
     # Uses another notation for period, fix if needed
@@ -223,6 +221,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     candles = []
     while current_timestamp < end:
         urlparams['start']=current_timestamp
+        urlparams['end']=current_timestamp+(limit*period)
         url = format_apiurl(api, urlparams)
 
         # TODO more error checking and rescheduling if there is an error and the current_timestamp has been updated at least one (i.e. > start)
@@ -231,6 +230,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
             print(f"""In function get_from_api, got bad response {response.status_code}. Exiting early.""")
             break
 
+        # load and convert the candlestick info to be a common format
         json_response = json.loads(response.content)
         candlestick_info = conform_json_response(api, json_response)
 
@@ -260,24 +260,24 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
          start  = start,
          end    = end,
          last_timestamp    = current_timestamp,
+         trading_pair = trading_pair,
          candles_collected = len(candles),
          period = period) # period in seconds
-
-def get_latest_date(api, exchange_id, trading_pair):
-    
-    pass
     
 def live_update():
-    # First check for the latest date, defaulting to '01-01-2019' if there is no historical entries
-    end = int(time.time())
+    """
+        Updates the database based on the info in data/api_info.json with new candlestick info,
+        grabbing data from the last timestamp until now, with the start date set at the start of 2019.
+    """
     for api, api_data in api_info.items():
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
                 # timestamp is January 1st 2019
                 start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 
-                start = int(date.convert_datetime(start))
                 end = int(time.time()) # the time is now
+
+                print(start, end)
     
                 candle_info = (
                     get_from_api(
@@ -286,17 +286,17 @@ def live_update():
                         trading_pair=trading_pair,
                         period=300,
                         interval=[start, end]))
-        
-                # Make an obvious error message if there is an issue for now
-                if candle_info['start'] < candle_info['end']:
-                    print('Start is less than end!')
-                    print(f"Candles collected {candle_info['candles_collected']}"")
-                    print('-----------')
-                    print(api, exchange_id, trading_pair, candle_info['start'], candle_info['end'])
-                
-                sql.add_candle_data_to_table(candle_info)
 
-                print(candle_info)
+                # TODO validate candlestick info more thoroughly
+                # Make an obvious error message if an error seems to have happened.
+                if candle_info['last_timestamp'] < candle_info['end']:
+                    print('Last timestep is less than end time!')
+                    print(f"Candles collected {candle_info['candles_collected']}")
+                    print('-----------')
+                    print(api, exchange_id, trading_pair, candle_info['last_timestamp'], candle_info['end'])
+                
+                sql.candlestick_to_sql(candle_info)
+
                 # TODO, update dataframe with candle info and save that 
                 # later to a csv
                 return # TODO  remove

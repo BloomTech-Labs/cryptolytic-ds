@@ -23,12 +23,9 @@ def sql_error(error):
     print(f"Error Code: {e.pgcode}\n")
 
 def check_tables():
-    print("hey")
     creds = get_credentials()
-    print(creds)
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-    print("hey2")
     query = """SELECT * FROM pg_catalog.pg_tables
                WHERE schemaname != 'pg_catalog'
                AND schemaname != 'information_schema';"""
@@ -44,7 +41,7 @@ def create_candle_table():
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     query = """CREATE TABLE candlesticks 
-                (api text primary key not null,
+                (api text not null,
                  exchange text not null,
                  trading_pair text not null,
                  timestamp bigint not null,
@@ -52,7 +49,7 @@ def create_candle_table():
                  close numeric not null,
                  high numeric not null,
                  low numeric not null,
-                 volume bigint not null);"""
+                 volume numeric not null);"""
     try:
         cur.execute(query)
     except ps.OperationalError as e:
@@ -60,6 +57,16 @@ def create_candle_table():
         return
     conn.commit()
 
+def drop_candle_table():
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = """DROP TABLE IF EXISTS candlesticks;"""
+    try:
+        cur.execute(query)
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+    conn.commit()
 
 def check_candle_table():
     conn = ps.connect(**get_credentials())
@@ -69,12 +76,33 @@ def check_candle_table():
     cur.execute(query)
     results = cur.fetchall()
     print(results)
-
-
-def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
-
+    
+def add_candle_data_to_table2(dfdata, cur):
+    """
+        Builds a string from our data-set using the mogrify method which is then called once using the execute method
+    """
+    query ="%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s" 
+    args_str = (','.join(
+                cursor.mogrify(query, 
+                                       {
+                                        'api': dfdata['api'],
+                                        'exchange': dfdata['exchange'],
+                                        'trading_pair': dfdata['trading_pair'],
+                                        'timestamp': str(dfdata['timestamp']),
+                                        'open': dfdata['open'],
+                                        'close': dfdata['close'],
+                                        'high': dfdata['high'],
+                                        'low': dfdata['low'],
+                                        'volume': dfdata['volume']
+                                        })))
+    try:
+        cur.execute("INSERT INTO {table} VALUES".format(table=TABLE_NAME) + args_str)    
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+    
+def add_candle_data_to_table(dfdata, conn):
     # open connection to the AWS RDS
-    conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     
     query = """
@@ -83,25 +111,36 @@ def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
     """
     try:
         cur.execute(
-        query,
-        {
-            'api': dfdata['api'],
-            'exchange': dfdata['exchange'],
-            'trading_pair': str(trading_pair),
-            'timestamp': dfdata['timestamp'],
-            'open': dfdata['open'],
-            'close': dfdata['close'],
-            'high': dfdata['high'],
-            'low': dfdata['low'],
-            'volume': dfdata['volume']
-        }
+            query,
+            {
+                'api': dfdata['api'],
+                'exchange': dfdata['exchange'],
+                'trading_pair': dfdata['trading_pair'],
+                'timestamp': str(dfdata['timestamp']),
+                'open': dfdata['open'],
+                'close': dfdata['close'],
+                'high': dfdata['high'],
+                'low': dfdata['low'],
+                'volume': dfdata['volume']
+            }
     )
     except ps.OperationalError as e:
         sql_error(e)
         return
-      
-    conn.commit()
-
+    
+def get_table_schema(table_name):
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = f"""
+        select column_name, data_type, character_maximum_length
+        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
+    """
+    try:
+        cur.execute(query)
+        return cur.fetchall()
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
 
 def get_latest_date(exchange_id, trading_pair):
     """
@@ -110,16 +149,40 @@ def get_latest_date(exchange_id, trading_pair):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     query = """
-        SELECT * FROM candlesticks
-        WHERE exchange={exchange_id} AND trading_pair={trading_pair}
+        SELECT timestamp FROM candlesticks
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
         ORDER BY timestamp desc
         LIMIT 1;
     """
     latest_date = None
     try:
-        cur.execute(query)
-        latest_date = cur.fetchone()
+        cur.execute(query,
+                    {'exchange_id' : exchange_id,
+                     'trading_pair' : trading_pair})
+        latest_date = cur.fetchone()[0]
     except ps.OperationalError as e:
         sql_error(e)
         return
-    return latest_date or 1546300800 
+    return latest_date
+
+def get_some_candles(n=100):
+    """
+        Return some candles
+    """
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = f"""
+        SELECT * FROM candlesticks;
+    """
+    try:
+        cur.execute(query)
+        return cur.fetchall()
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+
+def candlestick_to_sql(data):
+    conn = ps.connect(**get_credentials())
+    dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
+    add_candle_data_to_table2(dfdata, conn)
+    conn.commit()
