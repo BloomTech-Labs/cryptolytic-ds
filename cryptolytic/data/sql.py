@@ -86,7 +86,9 @@ def add_candle_data_to_table2(df, cur):
     df['timestamp'] = df['timestamp'].apply(str)
     print(df[order].values[0])
 
-    args_str = ','.join(cur.mogrify(query, row) for row in df[order].values)
+    x = [str(cur.mogrify(query, row), encoding='utf-8') for row in df[order].values]
+    print(x[0])
+    args_str = ','.join(x)
     print(args_str)
     try:
         cur.execute("INSERT INTO candlesticks VALUES" + args_str)    
