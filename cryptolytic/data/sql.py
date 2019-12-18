@@ -77,24 +77,13 @@ def check_candle_table():
     results = cur.fetchall()
     print(results)
     
-def add_candle_data_to_table2(dfdata, cur):
+def add_candle_data_to_table2(d, cur):
     """
         Builds a string from our data-set using the mogrify method which is then called once using the execute method
     """
-    query ="%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s" 
-    args_str = (','.join(
-                cursor.mogrify(query, 
-                                       {
-                                        'api': dfdata['api'],
-                                        'exchange': dfdata['exchange'],
-                                        'trading_pair': dfdata['trading_pair'],
-                                        'timestamp': str(dfdata['timestamp']),
-                                        'open': dfdata['open'],
-                                        'close': dfdata['close'],
-                                        'high': dfdata['high'],
-                                        'low': dfdata['low'],
-                                        'volume': dfdata['volume']
-                                        })))
+    query ="%(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s)" 
+    thing = list(map(lambda x: d[x].values, ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume']))
+    args_str = (','.join(cur.mogrify(query, thing)))
     try:
         cur.execute("INSERT INTO {table} VALUES".format(table=TABLE_NAME) + args_str)    
     except ps.OperationalError as e:
@@ -113,15 +102,15 @@ def add_candle_data_to_table(dfdata, conn):
         cur.execute(
             query,
             {
-                'api': dfdata['api'],
-                'exchange': dfdata['exchange'],
-                'trading_pair': dfdata['trading_pair'],
-                'timestamp': str(dfdata['timestamp']),
-                'open': dfdata['open'],
-                'close': dfdata['close'],
-                'high': dfdata['high'],
-                'low': dfdata['low'],
-                'volume': dfdata['volume']
+                'api': dfdata['api'].values(),
+                'exchange': dfdata['exchange'].values(),
+                'trading_pair': dfdata['trading_pair'].values(),
+                'timestamp': str(dfdata['timestamp'].values()),
+                'open': dfdata['open'].values(),
+                'close': dfdata['close'].values(),
+                'high': dfdata['high'].values(),
+                'low': dfdata['low'].values(),
+                'volume': dfdata['volume'].values()
             }
     )
     except ps.OperationalError as e:
@@ -183,6 +172,7 @@ def get_some_candles(n=100):
 
 def candlestick_to_sql(data):
     conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
     dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
-    add_candle_data_to_table2(dfdata, conn)
+    add_candle_data_to_table2(dfdata, cur)
     conn.commit()
