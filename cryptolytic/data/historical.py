@@ -191,7 +191,7 @@ def conform_json_response(api, json_response):
         raise Exception('API not supported', api)
     return None
 
-def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
+def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
                  period=14400, interval=None, apikey=None):
     """period : candlestick length in seconds. Default 4 hour period.
        interval : time interval, either unix or %d-%m-%Y format
@@ -268,8 +268,10 @@ def get_latest_date(api, exchange_id, trading_pair):
     pass
     
 def live_update():
-    # First check for the latest date, defaulting to '01-01-2019' if there is no historical entries
-    end = int(time.time())
+    """
+        Updates the database based on the info in data/api_info.json with new candlestick info,
+        grabbing data from the last timestamp until now, with the start date set at the start of 2019.
+    """
     for api, api_data in api_info.items():
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
@@ -286,8 +288,9 @@ def live_update():
                         trading_pair=trading_pair,
                         period=300,
                         interval=[start, end]))
-        
-                # Make an obvious error message if there is an issue for now
+
+                # TODO validate candlestick info more thoroughly
+                # Make an obvious error message if an error seems to have happened.
                 if candle_info['start'] < candle_info['end']:
                     print('Start is less than end!')
                     print(f"Candles collected {candle_info['candles_collected']}")

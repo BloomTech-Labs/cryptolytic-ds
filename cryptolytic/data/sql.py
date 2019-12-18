@@ -140,13 +140,15 @@ def get_latest_date(exchange_id, trading_pair):
     cur = conn.cursor()
     query = """
         SELECT * FROM candlesticks
-        WHERE exchange={exchange_id} AND trading_pair={trading_pair}
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
         ORDER BY timestamp desc
         LIMIT 1;
     """
     latest_date = None
     try:
-        cur.execute(query)
+        cur.execute(query,
+                    {'exchange_id' : exchange_id,
+                     'trading_pair' : trading_pair})
         latest_date = cur.fetchone()
     except ps.OperationalError as e:
         sql_error(e)
