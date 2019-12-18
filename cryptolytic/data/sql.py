@@ -92,11 +92,11 @@ def add_candle_data_to_table():
     # )
     #         """ + str(df[1:]) + ';'
 
-    # mydict = pd.io.json.json_normalize(mydict, sep='_')
-    # myDict = mydict.to_dict()
+    mydict = pd.io.json.json_normalize(mydict, sep='_')
+    myDict = mydict.to_dict()
 
-    myDict = pd.DataFrame.from_dict(mydict)
-    myDict = myDict.to_dict()
+    # myDict = pd.DataFrame.from_dict(mydict)
+    # myDict = myDict.to_dict()
 
     placeholders = ', '.join(['%s'] * len(myDict))
     columns = ', '.join(myDict.keys())
