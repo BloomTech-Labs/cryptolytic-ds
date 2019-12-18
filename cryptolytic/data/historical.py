@@ -67,7 +67,7 @@ def convert_candlestick(candlestick, api, timestamp):
     print(api)
     print(candlestick)
     candlestick = candlestick.copy()
-    candlestick['timestamp'] = timestamp
+    
 
     if api=='poloniex':
         pass
@@ -100,6 +100,7 @@ def convert_candlestick(candlestick, api, timestamp):
     else:
         raise Exception('API not supported ', api)
 
+    candlestick['timestamp'] = timestamp
     return candlestick
 
 # Exchange, Trading Pair, Api Key, Period, After
@@ -231,6 +232,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
 
         json_response = json.loads(response.content)
         candlestick_info = conform_json_response(api, json_response)
+
         assert len(candlestick_info) > 0
         # Add to candles list.
         for i, candle in enumerate(candlestick_info):
@@ -244,7 +246,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
         break # TODO remove
 
     # Check if candle schema is valid
-    candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low', 'quoteVolume']
+    candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
     assert all(x in candles[0].keys() for x in candle_schema)
 
 

@@ -1,5 +1,9 @@
 import psycopg2 as ps
 import os
+from cryptolytic.data import historical
+import time
+import pandas as pd
+import json
 
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
@@ -72,21 +76,35 @@ def add_candle_data_to_table():
     # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
+    mydict = historical.get_from_api(api = 'bitfinex', exchange='bitfinex', trading_pair='eth_btc', interval=[(time.time()-100000), time.time()])
+    
+    # df = pd.DataFrame.from_dict(df)
+    # query = """INSERT INTO candlesticks(
+    #     api,
+    #     exchange,
+    #     trading_pair,
+    #     timestamp,
+    #     open,
+    #     close,
+    #     high,
+    #     low,
+    #     volume
+    # )
+    #         """ + str(df[1:]) + ';'
 
-    # write the query
-    query = """INSERT INTO candlesticks(
-        api,
-        exchange,
-        trading_pair,
-        timestamp,
-        open,
-        close,
-        high,
-        low,
-        volume
-    )
-            """
+    # mydict = pd.io.json.json_normalize(mydict, sep='_')
+    # myDict = mydict.to_dict()
 
-    # execute and commit the query
-    cur.execute(query)
-    conn.commit()
+    myDict = pd.DataFrame.from_dict(mydict)
+    myDict = myDict.to_dict()
+
+    placeholders = ', '.join(['%s'] * len(myDict))
+    columns = ', '.join(myDict.keys())
+    sql = "INSERT INTO candlesticks ( %s ) VALUES ( %s )" % (columns, placeholders)
+    myDict = list(myDict.values())
+    cur.execute(sql, myDict)
+
+
+    # # execute and commit the query
+    # cur.execute(query)
+    # conn.commit()
