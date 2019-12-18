@@ -77,14 +77,15 @@ def check_candle_table():
     results = cur.fetchall()
     print(results)
     
-def add_candle_data_to_table2(d, cur):
+def add_candle_data_to_table2(d, cur, table_name):
     """
         Builds a string from our data-set using the mogrify method which is then called once using the execute method
     """
     query ="%(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s), %(s)" 
-    args_str = (',', cur.mogrify(query, x) for x in map(lambda x: d[x].values, ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume']))
+    args_str = (','.join(cur.mogrify(query, x) for x in map(lambda x: d[x].values, ['api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close', 'high', 'low', 'volume'])))
+    print(args_str)
     try:
-        cur.execute("INSERT INTO {table} VALUES".format(table=TABLE_NAME) + args_str)    
+        cur.execute("INSERT INTO {table} VALUES".format(table=table_name) + args_str)    
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -169,9 +170,9 @@ def get_some_candles(n=100):
         sql_error(e)
         return
 
-def candlestick_to_sql(data):
+def candlestick_to_sql(data, table_name):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
-    add_candle_data_to_table2(dfdata, cur)
+    add_candle_data_to_table2(dfdata, cur, table_name=table_name)
     conn.commit()
