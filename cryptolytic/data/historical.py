@@ -158,10 +158,10 @@ def get_time_interval(api, period):
     if accepted_values == None:
         raise Exception('API not supported', api)
     elif weeks >= 1 and accepted_values.has('weeks'):
-        x = list(filter(lambda x: x<hours, accepted_values['weeks']))
+        x = list(filter(lambda x: x<weeks, accepted_values['weeks']))
         interval = 'w'+str(np.max(x))
     elif days >= 1:
-        x = list(filter(lambda x: x<hours, accepted_values['days']))
+        x = list(filter(lambda x: x<days, accepted_values['days']))
         interval = 'd'+str(np.max(x))
     elif hours >= 1:
         x = list(filter(lambda x: x<hours, accepted_values['hours']))
