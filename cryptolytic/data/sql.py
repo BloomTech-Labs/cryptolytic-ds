@@ -71,28 +71,32 @@ def check_candle_table():
     print(results)
 
 
-def add_candle_data_to_table():
+def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
 
     # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-    data = historical.get_from_api(api = 'bitfinex', exchange='bitfinex', trading_pair='eth_btc', interval=[(time.time()-100000), time.time()])
 
-    dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
-
-
-    for index, row in dfdata.iterrows():
-        query = """INSERT INTO candlesticks(
-            close,
-            high,
-            low,
-            open,
-            timestamp,
-            volume,
-            api,
-            exchange
-        )
-                """ + str(row['close']) + ' ' + str(row['high']) + ' ' + str(row['low']) + ' ' + str(row['open']) + ' ' + str(row['timestamp']) + ' ' + str(row['volume']) + ' ' + str(row['api']) + ' ' + str(row['exchange']) + ';'
-        # execute and commit the query
-        cur.execute(query)
+    query = """
+        INSERT INTO candlesticks(api, exchange, trading_pair, timestamp, open, close, high, low, volume)
+        VALUES (%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s);
+    """
+    try:
+        cur.execute(
+        query,
+        {
+            'api': dfdata['api'],
+            'exchange': dfdata['exchange'],
+            'trading_pair': str(trading_pair),
+            'timestamp': dfdata['timestamp'],
+            'open': dfdata['open'],
+            'close': dfdata['close'],
+            'high': dfdata['high'],
+            'low': dfdata['low'],
+            'volume': dfdata['volume']
+        }
+    )
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
     conn.commit()
