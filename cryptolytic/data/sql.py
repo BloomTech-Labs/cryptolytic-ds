@@ -76,35 +76,23 @@ def add_candle_data_to_table():
     # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-    mydict = historical.get_from_api(api = 'bitfinex', exchange='bitfinex', trading_pair='eth_btc', interval=[(time.time()-100000), time.time()])
-    
-    # df = pd.DataFrame.from_dict(df)
-    # query = """INSERT INTO candlesticks(
-    #     api,
-    #     exchange,
-    #     trading_pair,
-    #     timestamp,
-    #     open,
-    #     close,
-    #     high,
-    #     low,
-    #     volume
-    # )
-    #         """ + str(df[1:]) + ';'
+    data = historical.get_from_api(api = 'bitfinex', exchange='bitfinex', trading_pair='eth_btc', interval=[(time.time()-100000), time.time()])
 
-    mydict = pd.io.json.json_normalize(mydict, sep='_')
-    myDict = mydict.to_dict()
-
-    # myDict = pd.DataFrame.from_dict(mydict)
-    # myDict = myDict.to_dict()
-
-    placeholders = ', '.join(['%s'] * len(myDict))
-    columns = ', '.join(myDict.keys())
-    sql = "INSERT INTO candlesticks ( %s ) VALUES ( %s )" % (columns, placeholders)
-    myDict = list(myDict.values())
-    cur.execute(sql, myDict)
+    dfdata = pd.concat([pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1).drop(['candles', 'candles_collected', 'last_timestamp', 'start', 'end', 'period'], axis=1)
 
 
-    # # execute and commit the query
-    # cur.execute(query)
-    # conn.commit()
+    for index, row in dfdata.iterrows():
+        query = """INSERT INTO candlesticks(
+            close,
+            high,
+            low,
+            open,
+            timestamp,
+            volume,
+            api,
+            exchange
+        )
+                """ + str(row['close']) + ' ' + str(row['high']) + ' ' + str(row['low']) + ' ' + str(row['open']) + ' ' + str(row['timestamp']) + ' ' + str(row['volume']) + ' ' + str(row['api']) + ' ' + str(row['exchange']) + ';'
+        # execute and commit the query
+        cur.execute(query)
+    conn.commit()
