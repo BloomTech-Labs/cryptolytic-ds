@@ -5,6 +5,7 @@
 """
 import requests
 from cryptolytic.util import date
+from cryptolytics.data import sql
 import time
 import os
 import requests
@@ -253,31 +254,31 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btceth',
     # TODO reschedule task and log error if the last_timestamp is not >= end
     # TODO drop duplicates
     return dict(
-         api=api,
+         api = api,
          exchange = exchange,
          candles=candles,
          start  = start,
          end    = end,
          last_timestamp    = current_timestamp,
          candles_collected = len(candles),
-         period = str(datetime.timedelta(seconds=period)))
+         period = period) # period in seconds
 
-def collect_data():
-    get_from_api(api=api,
-                exchange=exchange,
-                trading_pair = trading_pair,
-                period=period,
-                interval=[start, end],
-                apikey=os.getenv(apikey))
+def get_latest_date(api, exchange_id, trading_pair):
+    
+    pass
     
 def live_update():
-    # TODO get the missing candle stick
-    start = int(time.time() - 86400) # one day is 86400 seconds
-    end = int(time.time()) # current time
+    # First check for the latest date, defaulting to '01-01-2019' if there is no historical entries
+    end = int(time.time())
     for api, api_data in api_info.items():
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
+                # timestamp is January 1st 2019
+                start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 
+                start = int(date.convert_datetime(start))
+                end = int(time.time()) # the time is now
+    
                 candle_info = (
                     get_from_api(
                         api=api,
@@ -285,6 +286,15 @@ def live_update():
                         trading_pair=trading_pair,
                         period=300,
                         interval=[start, end]))
+        
+                # Make an obvious error message if there is an issue for now
+                if candle_info['start'] < candle_info['end']:
+                    print('Start is less than end!')
+                    print(f"Candles collected {candle_info['candles_collected']}"")
+                    print('-----------')
+                    print(api, exchange_id, trading_pair, candle_info['start'], candle_info['end'])
+                
+                sql.add_candle_data_to_table(candle_info)
 
                 print(candle_info)
                 # TODO, update dataframe with candle info and save that 

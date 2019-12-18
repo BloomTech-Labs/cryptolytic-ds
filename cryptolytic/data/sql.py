@@ -52,7 +52,7 @@ def create_candle_table():
                  close numeric not null,
                  high numeric not null,
                  low numeric not null,
-                 volume numeric not null);"""
+                 volume bigint not null);"""
     try:
         cur.execute(query)
     except ps.OperationalError as e:
@@ -76,7 +76,7 @@ def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
     # open connection to the AWS RDS
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
-
+    
     query = """
         INSERT INTO candlesticks(api, exchange, trading_pair, timestamp, open, close, high, low, volume)
         VALUES (%(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s, %(close)s, %(high)s, %(low)s, %(volume)s);
@@ -99,4 +99,27 @@ def add_candle_data_to_table(dfdata=[], trading_pair='etc_btc'):
     except ps.OperationalError as e:
         sql_error(e)
         return
+      
     conn.commit()
+
+
+def get_latest_date(exchange_id, trading_pair):
+    """
+        Return the latest date for a given trading pair on a given exchange
+    """
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = """
+        SELECT * FROM candlesticks
+        WHERE exchange={exchange_id} AND trading_pair={trading_pair}
+        ORDER BY timestamp desc
+        LIMIT 1;
+    """
+    latest_date = None
+    try:
+        cur.execute(query)
+        latest_date = cur.fetchone()
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+    return latest_date or 1546300800 
