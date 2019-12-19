@@ -6,7 +6,7 @@ def convert_datetime(t):
     """Convert value to unix time stamp if not. Currently handles %d-%m-%Y"""
     try:
         result = t
-        if type(t) isinstance(type("")):
+        if isinstance(type(t), type("")):
             converted = datetime.strptime(t, '%d-%m-%Y')
             # to get time in seconds:
             t = int(time.mktime(converted.timetuple()))
