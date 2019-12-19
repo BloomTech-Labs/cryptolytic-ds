@@ -1,12 +1,12 @@
 # Before running this py file, you should have a folder named 'coinbase_pro',
 # a folder named 'bitfinex', a folder named 'hitbtc', a folder named 'gemini',
 # and a folder named 'kraken' in your repository.
-# This py file will add 36 csvs to the 'coinbase_pro' folder totalling 
+# This py file will add 36 csvs to the 'coinbase_pro' folder totalling
 # 159.6 MB, 42 csvs to the 'bitfinex' folder totalling 286 MB, 36 csvs to
 # the 'hitbtc' folder totalling 256.2 MB, 16 csvs to the 'gemini' folder
 # totalling 4.2 MB, and 30 csvs to the 'kraken' folder totalling 10.4 MB
 # for a grand total of 160 csvs across five folders totalling 716.4 MB. The
-# csvs are created with their indices; if you would like to ignore the index 
+# csvs are created with their indices; if you would like to ignore the index
 # when importing a csv with pandas.read_csv, add index_col=0 as a parameter.
 
 import requests
