@@ -17,7 +17,7 @@ import pandas as pd
 
 # Json conversion dictionary for cryptocurrency abbreviations
 crypto_name_table = None
-with open('data/cryptocurrencies.json', 'r') as f:
+with open('data/cryptocurrencies.json', 'r', encoding='utf-8') as f:
     crypto_name_table = json.load(f)
 assert crypto_name_table.keys()
 
@@ -189,7 +189,7 @@ def conform_json_response(api, json_response):
     return None
 
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
-                 period=14400, interval=None, apikey=None):
+                 period=60, interval=None, apikey=None):
     """period : candlestick length in seconds. Default 4 hour period.
        interval : time interval, either unix or %d-%m-%Y format
     """
@@ -241,28 +241,21 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
             candlenew = convert_candlestick(candle, api, current_timestamp)
             candles.append(candlenew)
 
-        # Sleep for a second
-        time.sleep(5)
+            # Sleep for a second to avoid timeout. Should improve later.
+            time.sleep(1)
 
-        break # TODO remove
+            # Check if candle schema is valid
+            candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
+            assert all(x in candles[0].keys() for x in candle_schema)
 
-    # Check if candle schema is valid
-    candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
-    assert all(x in candles[0].keys() for x in candle_schema)
-
-
-    # TODO reschedule task and log error if the last_timestamp is not >= end
-    # TODO drop duplicates
-    return dict(
-         api = api,
-         exchange = exchange,
-         candles=candles,
-         start  = start,
-         end    = end,
-         last_timestamp    = current_timestamp,
-         trading_pair = trading_pair,
-         candles_collected = len(candles),
-         period = period) # period in seconds
+        yield dict(
+            api = api,
+            exchange = exchange,
+            candles=candles,
+            last_timestamp    = current_timestamp,
+            trading_pair = trading_pair,
+            candles_collected = len(candles),
+            period = period) # period in seconds
     
 def live_update():
     """
@@ -277,25 +270,23 @@ def live_update():
                 start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 
                 end = int(time.time()) # the time is now
 
-                print(start, end)
-    
-                candle_info = (
-                    get_from_api(
-                        api=api,
-                        exchange=exchange_id,
-                        trading_pair=trading_pair,
-                        period=300,
-                        interval=[start, end]))
+                for candle_info in get_from_api(
+                                        api=api,
+                                        exchange=exchange_id,
+                                        trading_pair=trading_pair,
+                                        period=300,
+                                        interval=[start, end]):
+                    print(candle_info['last_timestamp'])
 
-                # TODO validate candlestick info more thoroughly
-                # Make an obvious error message if an error seems to have happened.
-                if candle_info['last_timestamp'] < candle_info['end']:
-                    print('Last timestep is less than end time!')
-                    print(f"Candles collected {candle_info['candles_collected']}")
-                    print('-----------')
-                    print(api, exchange_id, trading_pair, candle_info['last_timestamp'], candle_info['end'])
-                
-                sql.candlestick_to_sql(candle_info)
+                    # TODO validate candlestick info more thoroughly
+                    # Make an obvious error message if an error seems to have happened.
+                    if candle_info['last_timestamp'] < candle_info['end']:
+                        print('Last timestep is less than end time!')
+                        print(f"Candles collected {candle_info['candles_collected']}")
+                        print('-----------')
+                        print(api, exchange_id, trading_pair, candle_info['last_timestamp'], candle_info['end'])
+                    
+                    sql.candlestick_to_sql(candle_info)
 
                 # TODO, update dataframe with candle info and save that 
                 # later to a csv
@@ -316,9 +307,3 @@ def test_get_candles():
     assert candle_info['candles'][0].keys()
 
     return candle_info
-
-#    get_candles(
-#        interval=['01-12-2011', '01-12-2018'],
-#        api='cryptowatch',
-#        trading_pairs=['bch_usd'])
-# "https://api.cryptowat.ch/markets/poloniex/ethbtc"

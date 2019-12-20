@@ -85,7 +85,7 @@ def check_candle_table():
     print(results)
 
 
-def add_candle_data_to_table2(df, cur):
+def add_candle_data_to_table(df, cur):
     """
         Builds a string from our data-set using the mogrify method which is
         then called once using the execute method
@@ -96,56 +96,18 @@ def add_candle_data_to_table2(df, cur):
         'high', 'low', 'volume'
         ]
     df['timestamp'] = df['timestamp'].apply(str)
-    print(df[order].values[0])
 
     x = [
         str(
             cur.mogrify(query, row), encoding='utf-8'
             ) for row in df[order].values
         ]
-    print(x[0])
     args_str = ','.join(x)
-    print(args_str)
     try:
         cur.execute("INSERT INTO candlesticks VALUES" + args_str)
     except ps.OperationalError as e:
         sql_error(e)
         return
-
-
-def add_candle_data_to_table(dfdata, conn):
-    # open connection to the AWS RDS
-    cur = conn.cursor()
-
-    query = """
-        INSERT INTO candlesticks(
-            api, exchange, trading_pair, timestamp, open,
-            close, high, low, volume
-            )
-        VALUES (
-            %(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s,
-            %(close)s, %(high)s, %(low)s, %(volume)s
-            );
-    """
-    try:
-        cur.execute(
-            query,
-            {
-                'api': dfdata['api'].values(),
-                'exchange': dfdata['exchange'].values(),
-                'trading_pair': dfdata['trading_pair'].values(),
-                'timestamp': str(dfdata['timestamp'].values()),
-                'open': dfdata['open'].values(),
-                'close': dfdata['close'].values(),
-                'high': dfdata['high'].values(),
-                'low': dfdata['low'].values(),
-                'volume': dfdata['volume'].values()
-            }
-            )
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-
 
 def get_table_schema(table_name):
     conn = ps.connect(**get_credentials())
@@ -212,5 +174,5 @@ def candlestick_to_sql(data, table_name):
                            ['candles', 'candles_collected', 'last_timestamp',
                             'start', 'end', 'period'], axis=1
                            )
-    add_candle_data_to_table2(dfdata, cur)
+    add_candle_data_to_table(dfdata, cur)
     conn.commit()
