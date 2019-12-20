@@ -8,7 +8,7 @@ import time
 import os
 import requests
 import json
-import datetime
+from datetime import datetime
 import numpy as np
 import pandas as pd
 
@@ -94,9 +94,6 @@ def convert_candlestick(candlestick, api, timestamp):
     candlestick['timestamp'] = timestamp
     return candlestick
 
-# Exchange, Trading Pair, Api Key, Period, After
-# Probably better to not to do start calls
-
 def format_apiurl(api, params={}):
     url = None
     params = params.copy()
@@ -115,7 +112,7 @@ def format_apiurl(api, params={}):
 
 # Coincap uses time intervals like h1, m15 etc. so need a function to convert to the seconds to that format
 def get_time_interval(api, period):
-    """For coincap, hitbtc, etc. which use intervals"""
+    """For coincap, hitbtc, etc. which use a format like 'm1' instead of period like 60 for 60 seconds."""
     minutes = period / 60
     hours = minutes / 60
     days = hours / 24
@@ -179,7 +176,7 @@ def conform_json_response(api, json_response):
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
                  period=60, interval=None, apikey=None):
     """period : candlestick length in seconds. Default 4 hour period.
-       interval : time interval, either unix or %d-%m-%Y format
+       interval : time interval, [start, end] either unix or %d-%m-%Y format
     """
     if api in {'cryptowatch'} and apikey==None:
         raise Exception('Missing API key')
@@ -271,14 +268,7 @@ def live_update():
                     ts = candle_info['last_timestamp']
                     print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
-                    # TODO validate candlestick info more thoroughly
-                    # Make an obvious error message if an error seems to have happened.
-                    if candle_info['last_timestamp'] < candle_info['end']:
-                        print('Last timestep is less than end time!')
-                        print(f"Candles collected {candle_info['candles_collected']}")
-                        print('-----------')
-                        print(api, exchange_id, trading_pair, candle_info['last_timestamp'], candle_info['end'])
-                    
+                    # Insert into sql
                     sql.candlestick_to_sql(candle_info)
 
                 # TODO, update dataframe with candle info and save that 

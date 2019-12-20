@@ -165,14 +165,13 @@ def get_some_candles(n=100):
         return
 
 
-def candlestick_to_sql(data, table_name):
+def candlestick_to_sql(data):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
         [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
                        ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp',
-                            'start', 'end', 'period'], axis=1
-                           )
+                           ['candles', 'candles_collected', 'last_timestamp', 'period'], 
+                           axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
