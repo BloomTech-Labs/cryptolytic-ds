@@ -4,7 +4,7 @@ from cryptolytic.data import historical
 import time
 import pandas as pd
 import json
-
+from itertools import repeat
 
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
@@ -50,6 +50,7 @@ def create_candle_table():
                  exchange text not null,
                  trading_pair text not null,
                  timestamp bigint not null,
+                 period numeric not null,
                  open numeric not null,
                  close numeric not null,
                  high numeric not null,
@@ -85,30 +86,6 @@ def check_candle_table():
     print(results)
 
 
-def add_candle_data_to_table(df, cur):
-    """
-        Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method
-    """
-    query = "(%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-    order = [
-        'api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close',
-        'high', 'low', 'volume'
-        ]
-    df['timestamp'] = df['timestamp'].apply(str)
-
-    x = [
-        str(
-            cur.mogrify(query, row), encoding='utf-8'
-            ) for row in df[order].values
-        ]
-    args_str = ','.join(x)
-    try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-
 def get_table_schema(table_name):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
@@ -133,6 +110,28 @@ def get_table_columns(table_name):
     try:
         cur.execute(query)
         return list(map(lambda x: x[0], cur.fetchall()))
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+
+def add_candle_data_to_table(df, cur):
+    """
+        Builds a string from our data-set using the mogrify method which is
+        then called once using the execute method
+    """
+    order = get_table_columns('candlesticks')
+    n = len(order)
+    query = "("+",".join(repeat("%s", n))+")"
+    df['timestamp'] = df['timestamp'].apply(str)
+
+    x = [
+        str(
+            cur.mogrify(query, row), encoding='utf-8'
+            ) for row in df[order].values
+        ]
+    args_str = ','.join(x)
+    try:
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -190,7 +189,7 @@ def candlestick_to_sql(data):
     dfdata = pd.concat(
         [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
                        ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp', 'period'], 
+                           ['candles', 'candles_collected', 'last_timestamp'], 
                            axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
