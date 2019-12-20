@@ -141,16 +141,16 @@ def get_time_interval(api, period):
     if accepted_values == None:
         raise Exception('API not supported', api)
     elif weeks >= 1 and accepted_values.has('weeks'):
-        x = list(filter(lambda x: x<weeks, accepted_values['weeks']))
+        x = list(filter(lambda x: x<=weeks, accepted_values['weeks']))
         interval = 'w'+str(np.max(x))
     elif days >= 1:
-        x = list(filter(lambda x: x<days, accepted_values['days']))
+        x = list(filter(lambda x: x<=days, accepted_values['days']))
         interval = 'd'+str(np.max(x))
     elif hours >= 1:
-        x = list(filter(lambda x: x<hours, accepted_values['hours']))
+        x = list(filter(lambda x: x<=hours, accepted_values['hours']))
         interval = 'h'+str(np.max(x))
     else:
-        x = [1] + list(filter(lambda x: x<minutes, accepted_values['minutes']))
+        x = [1] + list(filter(lambda x: x<=minutes, accepted_values['minutes']))
         interval = 'm'+str(np.max(x))
 
     # expects uppercase like 'M1' for 1 minute
@@ -175,7 +175,7 @@ def conform_json_response(api, json_response):
 
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
                  period=60, interval=None, apikey=None):
-    """period : candlestick length in seconds. Default 4 hour period.
+    """period : candlestick length in seconds. Default 60 seconds.
        interval : time interval, [start, end] either unix or %d-%m-%Y format
     """
     if api in {'cryptowatch'} and apikey==None:
@@ -239,7 +239,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
             api = api,
             exchange = exchange,
             candles=candles,
-            last_timestamp    = current_timestamp,
+            last_timestamp  = current_timestamp,
             trading_pair = trading_pair,
             candles_collected = len(candles),
             period = period) # period in seconds

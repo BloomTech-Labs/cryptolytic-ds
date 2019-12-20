@@ -154,7 +154,9 @@ def get_latest_date(exchange_id, trading_pair):
         cur.execute(query,
                     {'exchange_id': exchange_id,
                      'trading_pair': trading_pair})
-        latest_date = cur.fetchone()[0]
+        latest_date = cur.fetchone()
+        if latest_date != None:
+            return latest_date[0]
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -163,7 +165,7 @@ def get_latest_date(exchange_id, trading_pair):
 
 def get_some_candles(n=100):
     """
-        Return some candles
+        Return n candles
     """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
@@ -174,7 +176,9 @@ def get_some_candles(n=100):
     """
     try:
         cur.execute(query)
-        return cur.fetchall()
+        results = cur.fetchall()
+        df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
+        return df
     except ps.OperationalError as e:
         sql_error(e)
         return
