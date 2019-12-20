@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import numpy as np
 import pandas as pd
+from collections import deque
 
 
 # Json conversion dictionary for cryptocurrency abbreviations
@@ -173,22 +174,24 @@ def conform_json_response(api, json_response):
         raise Exception('API not supported', api)
     return None
 
-def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
-                 period=60, interval=None, apikey=None):
+def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
+                 start=1546300800, limit=100, period=60, apikey=None):
     """period : candlestick length in seconds. Default 60 seconds.
-       interval : time interval, [start, end] either unix or %d-%m-%Y format
+      
     """
     if api in {'cryptowatch'} and apikey==None:
         raise Exception('Missing API key')
+
+    print(api)
+    print(trading_pair)
 
     # Variable initialization
     pair_info = trading_pair_info(api, trading_pair)
     baseId = pair_info.get('baseId') # the first coin in the pair
     quoteId = pair_info.get('quoteId') # the second coin in the pair
     trading_pair = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
-    start = date.convert_datetime(interval[0]) # start time unix timestamp
-    end = date.convert_datetime(interval[1])  # end time unix timestamp
-    limit=100 # 100 limit by default, should change depending on the API later, by adding the limit information in data/api_info.json
+    start = start # start time unix timestamp
+    end = start+period*limit  # end time unix timestamp
     assert start < end
 
     # parameters for the url to get candle data from
@@ -200,96 +203,92 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
     if api in {'coincap', 'hitbtc', 'bitfinex'}:
         urlparams['interval'] = get_time_interval(api, period)
 
+    urlparams['start']=start
+    urlparams['end']=end
+    url = format_apiurl(api, urlparams)
+
+    # TODO more error checking and rescheduling if there is an error and the current_timestamp has been updated at least one (i.e. > start)
+    response = requests.get(url)
+    if response.status_code != 200:
+        print(f"""In function get_from_api, got bad response {response.status_code}. Exiting early.""")
+        print(f"""Response Content: {response.content}""")
+        return
+
+    # load and convert the candlestick info to be a common format
+    json_response = json.loads(response.content)
+    candlestick_info = conform_json_response(api, json_response)
+
+    assert len(candlestick_info) > 0
 
     # Get all the candle sticks in the time period.
-    current_timestamp = start
     candles = []
-    while current_timestamp < end:
-        urlparams['start']=current_timestamp
-        urlparams['end']=current_timestamp+(limit*period)
-        url = format_apiurl(api, urlparams)
+    current_timestamp = start
+    for candle in candlestick_info:
+        current_timestamp += period
+        candlenew = convert_candlestick(candle, api, current_timestamp)
+        candles.append(candlenew)
 
-        # TODO more error checking and rescheduling if there is an error and the current_timestamp has been updated at least one (i.e. > start)
-        response = requests.get(url)
-        if response.status_code != 200:
-            print(f"""In function get_from_api, got bad response {response.status_code}. Exiting early.""")
-            break
-
-        # load and convert the candlestick info to be a common format
-        json_response = json.loads(response.content)
-        candlestick_info = conform_json_response(api, json_response)
-
-        assert len(candlestick_info) > 0
-        # Add to candles list.
-        for i, candle in enumerate(candlestick_info):
-            current_timestamp += period
-            candlenew = convert_candlestick(candle, api, current_timestamp)
-            candles.append(candlenew)
-
-
-            # Check if candle schema is valid
-            candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
-            assert all(x in candles[0].keys() for x in candle_schema)
-
-        # Sleep for a second to avoid timeout. Should improve later.
-        time.sleep(1)
-
-        # yield the candlestick information
-        yield dict(
-            api = api,
-            exchange = exchange,
-            candles=candles,
-            last_timestamp  = current_timestamp,
-            trading_pair = trading_pair,
-            candles_collected = len(candles),
-            period = period) # period in seconds
+    # Check if candle schema is valid
+    candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
+    assert all(x in candles[0].keys() for x in candle_schema)
     
+    # return the candlestick information
+    return dict(
+        api = api,
+        exchange = exchange,
+        candles=candles,
+        last_timestamp  = current_timestamp,
+        trading_pair = trading_pair,
+        candles_collected = len(candles),
+        period = period) # period in seconds
+
 def live_update():
     """
         Updates the database based on the info in data/api_info.json with new candlestick info,
         grabbing data from the last timestamp until now, with the start date set at the start of 2019.
     """
+
+
+    now = time.time() # time now
+
+    # use a deque to rotate the tasks, and pop them when they are done. 
+    # this is to avoid sending too many requests to one api at once.
+    d = deque()
     for api, api_data in api_info.items():
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
-                # timestamp is January 1st 2019
-                start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 
-                end = int(time.time()) # the time is now
+                d.append([api, exchange_id, trading_pair])
+    
+    for i in range(10_000):
+        if len(d)==0:
+            break
 
-                for candle_info in get_from_api(
-                                        api=api,
-                                        exchange=exchange_id,
-                                        trading_pair=trading_pair,
-                                        period=300,
-                                        interval=[start, end]):
+        api, exchange_id, trading_pair  = d[-1] # get the current task
+        start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 # timestamp is January 1st 2019
+        period = 300 # 5 minutes
+        limit = 100 # limit to 100 candles
 
-                    # Log the timestamp
-                    ts = candle_info['last_timestamp']
-                    print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
-                    # Insert into sql
-                    try:
-                        sql.candlestick_to_sql(candle_info)
-                    except Exception as e:
-                        print(e)
+        candle_info = get_from_api(api=api,
+                                    exchange=exchange_id,
+                                    trading_pair=trading_pair,
+                                    start=start,
+                                    period=period,
+                                    limit=limit)
+        
+        # last candle is up to date with current time, done updating for this trading_pair on this exchange
+        if candle_info['last_timestamp'] >= round(now)-period:
+            d.pop() # pop task when done
+        else:
+            d.rotate(1) # rotate the task
 
-                # TODO, update dataframe with candle info and save that 
-                # later to a csv
-                return # TODO  remove
+        # Log the timestamp
+        ts = candle_info['last_timestamp']
+        print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
-def test_get_candles():
-    start = '01-01-2019'
-    start = date.convert_datetime(start)
-    end = start + 14400*2
-
-    candle_info = get_from_api(api='bitfinex',
-                            exchange='binance',
-                            trading_pair ='eth_btc',
-                            period=14400,
-                            interval=[start, end],
-                            apikey=os.getenv('_cryptowatch_private_key'))
-
-    assert candle_info['candles'][0].keys()
-
-    return candle_info
+        # Insert into sql
+        try:
+            sql.candlestick_to_sql(candle_info)
+        except Exception as e:
+            print(e)
