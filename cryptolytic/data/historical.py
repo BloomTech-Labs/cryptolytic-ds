@@ -1,7 +1,5 @@
 """
     Description: Contains functions on APIs and turning that into candlestick data.
-    Fully Implemented: Cryptowatch, Poloniex, CoinAPI
-
 """
 import requests
 from cryptolytic.util import date
@@ -66,13 +64,11 @@ def trading_pair_info(api, x):
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick = candlestick.copy()
-    
 
     if api=='poloniex':
         pass
     elif api=='coincap':
         pass
-#        candlestick['quoteVolume'] = -1 # Unknown quote volume
     elif api=='cryptowatch':
         candlestick = {
             'close' : candlestick[0],
@@ -80,7 +76,6 @@ def convert_candlestick(candlestick, api, timestamp):
             'high'  : candlestick[2],
             'low'   : candlestick[3],
             'volume' : candlestick[4],
-#            'quoteVolume' : candlestick[5]
         }
     elif api=='bitfinex':
         candlestick = {
@@ -89,13 +84,10 @@ def convert_candlestick(candlestick, api, timestamp):
             'high'  : candlestick[3],
             'low'   : candlestick[4],
             'volume' : candlestick[5],
-#            'quoteVolume' : -1 # unknownquoteVolume
         }
     elif api=='hitbtc':
-        # timestamp is another format assume the default timestamp is correct instead
         candlestick['high'] = candlestick.pop('max')
         candlestick['low'] = candlestick.pop('min')
-#       candlestick['quoteVolume'] = candlestick.pop('volumeQuote')
     else:
         raise Exception('API not supported ', api)
 
@@ -104,10 +96,6 @@ def convert_candlestick(candlestick, api, timestamp):
 
 # Exchange, Trading Pair, Api Key, Period, After
 # Probably better to not to do start calls
-# TODO
-# take
-# coincap intervals: m1, m5, m15, m30, h1, h2, h4, h8, h12, d1, w1
-# associate them with num
 
 def format_apiurl(api, params={}):
     url = None
@@ -179,7 +167,7 @@ def get_time_interval(api, period):
 def conform_json_response(api, json_response):
     """Get the right data from the json response. Expects a list, either like [[],...], or like [{},..]"""
     if api=='cryptowatch':
-        return json_response['result'][str(period)]
+        return json_response['result'][str(period)] # TODO fix
     elif api=='coincap':
         return json_response['data']
     elif api in {'poloniex', 'hitbtc', 'bitfinex'}:
@@ -211,7 +199,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
                      period=period, end=start+(limit*period), baseId=baseId, quoteId=quoteId,
                      limit=limit)
 
-    # Uses another notation for period, fix if needed
+    # The API uses another notation for period (like 1m for 1 minute)
     if api in {'coincap', 'hitbtc', 'bitfinex'}:
         urlparams['interval'] = get_time_interval(api, period)
 
@@ -241,13 +229,15 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='btc_eth',
             candlenew = convert_candlestick(candle, api, current_timestamp)
             candles.append(candlenew)
 
-            # Sleep for a second to avoid timeout. Should improve later.
-            time.sleep(1)
 
             # Check if candle schema is valid
             candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
             assert all(x in candles[0].keys() for x in candle_schema)
 
+        # Sleep for a second to avoid timeout. Should improve later.
+        time.sleep(1)
+
+        # yield the candlestick information
         yield dict(
             api = api,
             exchange = exchange,
@@ -276,7 +266,10 @@ def live_update():
                                         trading_pair=trading_pair,
                                         period=300,
                                         interval=[start, end]):
-                    print(candle_info['last_timestamp'])
+
+                    # Log the timestamp
+                    ts = candle_info['last_timestamp']
+                    print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
                     # TODO validate candlestick info more thoroughly
                     # Make an obvious error message if an error seems to have happened.
