@@ -123,6 +123,19 @@ def get_table_schema(table_name):
         sql_error(e)
         return
 
+def get_table_columns(table_name):
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = f"""
+        select column_name
+        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
+    """
+    try:
+        cur.execute(query)
+        return list(map(lambda x: x[0], cur.fetchall()))
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
 
 def get_latest_date(exchange_id, trading_pair):
     """
@@ -155,7 +168,9 @@ def get_some_candles(n=100):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     query = f"""
-        SELECT * FROM candlesticks;
+        SELECT * FROM candlesticks
+        LIMIT {n}
+        ;
     """
     try:
         cur.execute(query)

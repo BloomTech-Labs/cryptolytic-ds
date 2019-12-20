@@ -269,7 +269,10 @@ def live_update():
                     print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
                     # Insert into sql
-                    sql.candlestick_to_sql(candle_info)
+                    try:
+                        sql.candlestick_to_sql(candle_info)
+                    except Exception as e:
+                        print(e)
 
                 # TODO, update dataframe with candle info and save that 
                 # later to a csv
