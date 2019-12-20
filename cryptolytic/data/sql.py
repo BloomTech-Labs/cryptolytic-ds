@@ -4,7 +4,7 @@ from cryptolytic.data import historical
 import time
 import pandas as pd
 import json
-
+from itertools import repeat
 
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
@@ -50,6 +50,7 @@ def create_candle_table():
                  exchange text not null,
                  trading_pair text not null,
                  timestamp bigint not null,
+                 period numeric not null,
                  open numeric not null,
                  close numeric not null,
                  high numeric not null,
@@ -85,68 +86,6 @@ def check_candle_table():
     print(results)
 
 
-def add_candle_data_to_table2(df, cur):
-    """
-        Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method
-    """
-    query = "(%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-    order = [
-        'api', 'exchange', 'trading_pair', 'timestamp', 'open', 'close',
-        'high', 'low', 'volume'
-        ]
-    df['timestamp'] = df['timestamp'].apply(str)
-    print(df[order].values[0])
-
-    x = [
-        str(
-            cur.mogrify(query, row), encoding='utf-8'
-            ) for row in df[order].values
-        ]
-    print(x[0])
-    args_str = ','.join(x)
-    print(args_str)
-    try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-
-
-def add_candle_data_to_table(dfdata, conn):
-    # open connection to the AWS RDS
-    cur = conn.cursor()
-
-    query = """
-        INSERT INTO candlesticks(
-            api, exchange, trading_pair, timestamp, open,
-            close, high, low, volume
-            )
-        VALUES (
-            %(api)s, %(exchange)s, %(trading_pair)s, %(timestamp)s, %(open)s,
-            %(close)s, %(high)s, %(low)s, %(volume)s
-            );
-    """
-    try:
-        cur.execute(
-            query,
-            {
-                'api': dfdata['api'].values(),
-                'exchange': dfdata['exchange'].values(),
-                'trading_pair': dfdata['trading_pair'].values(),
-                'timestamp': str(dfdata['timestamp'].values()),
-                'open': dfdata['open'].values(),
-                'close': dfdata['close'].values(),
-                'high': dfdata['high'].values(),
-                'low': dfdata['low'].values(),
-                'volume': dfdata['volume'].values()
-            }
-            )
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-
-
 def get_table_schema(table_name):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
@@ -161,6 +100,41 @@ def get_table_schema(table_name):
         sql_error(e)
         return
 
+def get_table_columns(table_name):
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    query = f"""
+        select column_name
+        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
+    """
+    try:
+        cur.execute(query)
+        return list(map(lambda x: x[0], cur.fetchall()))
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+
+def add_candle_data_to_table(df, cur):
+    """
+        Builds a string from our data-set using the mogrify method which is
+        then called once using the execute method
+    """
+    order = get_table_columns('candlesticks')
+    n = len(order)
+    query = "("+",".join(repeat("%s", n))+")"
+    df['timestamp'] = df['timestamp'].apply(str)
+
+    x = [
+        str(
+            cur.mogrify(query, row), encoding='utf-8'
+            ) for row in df[order].values
+        ]
+    args_str = ','.join(x)
+    try:
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
 
 def get_latest_date(exchange_id, trading_pair):
     """
@@ -179,7 +153,9 @@ def get_latest_date(exchange_id, trading_pair):
         cur.execute(query,
                     {'exchange_id': exchange_id,
                      'trading_pair': trading_pair})
-        latest_date = cur.fetchone()[0]
+        latest_date = cur.fetchone()
+        if latest_date != None:
+            return latest_date[0]
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -188,29 +164,32 @@ def get_latest_date(exchange_id, trading_pair):
 
 def get_some_candles(n=100):
     """
-        Return some candles
+        Return n candles
     """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     query = f"""
-        SELECT * FROM candlesticks;
+        SELECT * FROM candlesticks
+        LIMIT {n}
+        ;
     """
     try:
         cur.execute(query)
-        return cur.fetchall()
+        results = cur.fetchall()
+        df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
+        return df
     except ps.OperationalError as e:
         sql_error(e)
         return
 
 
-def candlestick_to_sql(data, table_name):
+def candlestick_to_sql(data):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
         [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
                        ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp',
-                            'start', 'end', 'period'], axis=1
-                           )
-    add_candle_data_to_table2(dfdata, cur)
+                           ['candles', 'candles_collected', 'last_timestamp'], 
+                           axis=1)
+    add_candle_data_to_table(dfdata, cur)
     conn.commit()
