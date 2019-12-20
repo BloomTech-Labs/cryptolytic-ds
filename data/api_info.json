@@ -7,7 +7,7 @@
             "api_call" :"http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
             "exchanges" : {
                 "binance" : {
-                    "trading_pairs" : ["eth_btc", "btc_usd"]
+                    "trading_pairs" : ["eth_btc", "btc_usdt"]
                 }
             }
         },
@@ -15,7 +15,7 @@
             "api_call" :"https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
             "exchanges" : {
                 "hitbtc" : {
-                    "trading_pairs" : ["eth_btc", "btc_usd"]
+                    "trading_pairs" : ["eth_btc", "btc_usdt"]
                 }
             }
         },
@@ -23,7 +23,7 @@
             "api_call" : "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?limit={limit}&sort=-1",
             "exchanges" : {
                 "bitfinex" : {
-                    "trading_pairs" : ["eth_btc", "btc_usd"]
+                    "trading_pairs" : ["eth_btc", "btc_usdt"]
                 }
             }
         }
