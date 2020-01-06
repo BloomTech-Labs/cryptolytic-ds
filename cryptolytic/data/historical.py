@@ -93,7 +93,9 @@ def convert_candlestick(candlestick, api, timestamp):
         raise Exception('API not supported ', api)
 
     candlestick['timestamp'] = timestamp
-    return candlestick
+    # only keep these keys, otherwise can mess up insertion
+    filtered_candlestick = {key: candlestick[key] for key in ['timestamp', 'open', 'close', 'high', 'low', 'volume']}
+    return filtered_candlestick
 
 def format_apiurl(api, params={}):
     url = None
@@ -189,13 +191,13 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
     pair_info = trading_pair_info(api, trading_pair)
     baseId = pair_info.get('baseId') # the first coin in the pair
     quoteId = pair_info.get('quoteId') # the second coin in the pair
-    trading_pair = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
+    trading_pair_api = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
     start = start # start time unix timestamp
     end = start+period*limit  # end time unix timestamp
     assert start < end
 
     # parameters for the url to get candle data from
-    urlparams = dict(exchange=exchange, trading_pair=trading_pair, apikey=apikey,
+    urlparams = dict(exchange=exchange, trading_pair=trading_pair_api, apikey=apikey,
                      period=period, end=start+(limit*period), baseId=baseId, quoteId=quoteId,
                      limit=limit)
 
@@ -254,7 +256,9 @@ def live_update():
     # use a deque to rotate the tasks, and pop them when they are done. 
     # this is to avoid sending too many requests to one api at once.
     d = deque()
-    for api, api_data in api_info.items():
+    
+    api_iter = api_info.items()
+    for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
@@ -263,12 +267,14 @@ def live_update():
     for i in range(10_000):
         if len(d)==0:
             break
+            
 
         api, exchange_id, trading_pair  = d[-1] # get the current task
+        
+        print(api, exchange_id, trading_pair)
         start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 # timestamp is January 1st 2019
         period = 300 # 5 minutes
         limit = 100 # limit to 100 candles
-
 
         candle_info = get_from_api(api=api,
                                     exchange=exchange_id,
@@ -292,3 +298,16 @@ def live_update():
             sql.candlestick_to_sql(candle_info)
         except Exception as e:
             print(e)
+            
+           
+def check_table(df):
+    "Check's dataframe to make sure it has every api, exchange, and trading pair from data/api_info.json"
+    assert df['api'].nunique() == len(api_info.keys()) - 1
+    for api in df['api'].unique():
+        df_api = df[df['api'] == api]
+        assert df_api['exchange'].nunique() == len(api_info[api]['exchanges'].keys())
+        for exchange in df_api['exchange'].unique():
+            df_exchange = df_api[df_api['exchange']==exchange]
+            assert df_exchange['trading_pair'].nunique() == len(api_info[api]['exchanges'][exchange]['trading_pairs'])
+
+            
