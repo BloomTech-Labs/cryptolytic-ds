@@ -6,6 +6,7 @@ import pandas as pd
 import json
 from itertools import repeat
 
+
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
     return {
@@ -100,6 +101,7 @@ def get_table_schema(table_name):
         sql_error(e)
         return
 
+
 def get_table_columns(table_name):
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
@@ -113,6 +115,7 @@ def get_table_columns(table_name):
     except ps.OperationalError as e:
         sql_error(e)
         return
+
 
 def add_candle_data_to_table(df, cur):
     """
@@ -136,6 +139,7 @@ def add_candle_data_to_table(df, cur):
         sql_error(e)
         return
 
+
 def get_latest_date(exchange_id, trading_pair):
     """
         Return the latest date for a given trading pair on a given exchange
@@ -154,7 +158,7 @@ def get_latest_date(exchange_id, trading_pair):
                     {'exchange_id': exchange_id,
                      'trading_pair': trading_pair})
         latest_date = cur.fetchone()
-        if latest_date != None:
+        if latest_date is not None:
             return latest_date[0]
     except ps.OperationalError as e:
         sql_error(e)
@@ -189,7 +193,7 @@ def candlestick_to_sql(data):
     dfdata = pd.concat(
         [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
                        ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp'], 
+                           ['candles', 'candles_collected', 'last_timestamp'],
                            axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
