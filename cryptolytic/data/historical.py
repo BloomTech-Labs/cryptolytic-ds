@@ -299,5 +299,15 @@ def live_update():
         except Exception as e:
             print(e)
             
+           
 def check_table(df):
-    assert df['api'].nunique() == len(api_info.keys())
+    "Check's dataframe to make sure it has every api, exchange, and trading pair from data/api_info.json"
+    assert df['api'].nunique() == len(api_info.keys()) - 1
+    for api in df['api'].unique():
+        df_api = df[df['api'] == api]
+        assert df_api['exchange'].nunique() == len(api_info[api]['exchanges'].keys())
+        for exchange in df_api['exchange'].unique():
+            df_exchange = df_api[df_api['exchange']==exchange]
+            assert df_exchange['trading_pair'].nunique() == len(api_info[api]['exchanges'][exchange]['trading_pairs'])
+
+            
