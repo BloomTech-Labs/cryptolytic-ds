@@ -170,26 +170,48 @@ def get_latest_date(exchange_id, trading_pair):
         return
     return latest_date
 
-def get_some_candles(info, n=100):
+
+def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles
     """
+
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     n = min(n, 10000) # no number larger than 10_000
+    select = "open, close, high, low, timestamp, volume" if not verbose else "*"
+    where = ''
+
+    def add_clause(where, key, clause):
+        if key in info.keys():
+            if len(where) == 0:
+                where = "WHERE " + clause + " "
+            else:
+                where += "AND " + clause + " "
+        return where
+
+    where = add_clause(where, 'exchange_id', "exchange=%(exchange_id)s")
+    where = add_clause(where, 'start', "timestamp >= %(start)s")
+    where = add_clause(where, 'end', "timestamp <= %(end)s")
+    where = add_clause(where, 'period', "period <= %(period)s")
+    where = add_clause(where, 'trading_pair', "trading_pair=%(trading_pair)s")
+
+    print(where)
+
     query = f"""
-        SELECT open, close, high, low, timestamp, volume FROM candlesticks
-        WHERE exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and 
-              period=%(period)s and timestamp >= %(start)s and timestamp <= %(end)s
+        SELECT {select} FROM candlesticks
+        {where}
         LIMIT {n} ;
     """
     try:
         cur.execute(query, info)
         results = cur.fetchall()
-        # TODO probably 
-        df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
+        columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
+        df = pd.DataFrame(results, columns=columns)
+        print('hello2')
         return df
     except ps.OperationalError as e:
+        print('hello')
         sql_error(e)
         return
 

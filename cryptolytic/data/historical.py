@@ -245,7 +245,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
         period = period) # period in seconds
             
 
-def yield_unique_pair(api_info):
+def yield_unique_pair():
     api_iter = api_info.items()
     for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
@@ -267,7 +267,7 @@ def live_update():
     # this is to avoid sending too many requests to one api at once.
     d = deque()
     
-    for api, exchange_id, trading_pair in yield_unique_pair(api_info):
+    for api, exchange_id, trading_pair in yield_unique_pair():
         d.append([api, exchange_id, trading_pair])
 
     for i in range(10_000):
