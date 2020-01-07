@@ -6,3 +6,5 @@ temp/
 *.zip
 out/
 venv/
+scratch.py
+test.env

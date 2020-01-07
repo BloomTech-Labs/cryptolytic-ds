@@ -1,8 +1,9 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify, send_from_directory
 from cryptolytic.data import sql, historical
 # utils file
 
 application = app = Flask(__name__)
+
 
 @application.route('/')
 def index():
@@ -15,8 +16,9 @@ def trade_predictions():
     try:
         content = request.get_json()
         return jsonify(content)
-    except Error as e:
+    except Exception as e:
         return f'Error {e}'
+
 
 @application.route('/arbitrage', methods=['POST'])
 def arbitrage_predictions():
@@ -27,32 +29,27 @@ def arbitrage_predictions():
     try:
         content = request.get_json()
         return jsonify(content)
-    except Error as e:
+    except Exception as e:
         return f'Error {e}'
+
 
 @application.route('/trade_candles', methods=['POST'])
 def trade_candles():
     """In: {exchange:}"""
     try:
         content = request.get_json()
-        content['exchange']
-        content['trading_pair']
-        content['start']
-        content['end']
-
-        return jsonify(content)
-    except Error as e:
-        return f'Error {e}'
-
-@application.route('/live_update', methods=['GET'])
-def live_update():
-    """In: {exchange:}"""
-    try:
-        print('something')
-        historical.live_update()
-        return 'thing'
+        assert (set(content.keys())
+                .issubset({'exchange_id', 'trading_pair', 'period', 'start', 'end'}))
+        df = sql.get_some_candles(content, n=1000000)
+        return df.to_json()
     except Exception as e:
-        return f'Error {e}'
+        print('Error', e)
+        return jsonify({'error' : repr(e)}), 403
+
+@application.route('/data/<path:path>')
+def data_folder(path):
+    "Serving static files from the data folder"
+    return send_from_directory('data', path)
 
 if __name__ == "__main__":
     application.run(port=8000, debug=True)

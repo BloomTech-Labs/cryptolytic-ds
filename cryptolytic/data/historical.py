@@ -243,7 +243,17 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
         trading_pair = trading_pair,
         candles_collected = len(candles),
         period = period) # period in seconds
+            
 
+def yield_unique_pair(api_info):
+    api_iter = api_info.items()
+    for api, api_data in api_iter:
+        api_exchanges = api_data['exchanges']
+        for exchange_id, exchange_data in api_exchanges.items():
+            for trading_pair in exchange_data['trading_pairs']:
+                yield (api, exchange_id, trading_pair)
+
+           
 def live_update():
     """
         Updates the database based on the info in data/api_info.json with new candlestick info,
@@ -257,17 +267,12 @@ def live_update():
     # this is to avoid sending too many requests to one api at once.
     d = deque()
     
-    api_iter = api_info.items()
-    for api, api_data in api_iter:
-        api_exchanges = api_data['exchanges']
-        for exchange_id, exchange_data in api_exchanges.items():
-            for trading_pair in exchange_data['trading_pairs']:
-                d.append([api, exchange_id, trading_pair])
-    
+    for api, exchange_id, trading_pair in yield_unique_pair(api_info):
+        d.append([api, exchange_id, trading_pair])
+
     for i in range(10_000):
         if len(d)==0:
             break
-            
 
         api, exchange_id, trading_pair  = d[-1] # get the current task
         
@@ -298,8 +303,8 @@ def live_update():
             sql.candlestick_to_sql(candle_info)
         except Exception as e:
             print(e)
-            
-           
+
+
 def check_table(df):
     "Check's dataframe to make sure it has every api, exchange, and trading pair from data/api_info.json"
     assert df['api'].nunique() == len(api_info.keys()) - 1

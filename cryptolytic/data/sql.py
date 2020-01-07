@@ -170,21 +170,23 @@ def get_latest_date(exchange_id, trading_pair):
         return
     return latest_date
 
-
-def get_some_candles(n=100):
+def get_some_candles(info, n=100):
     """
         Return n candles
     """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
+    n = min(n, 10000) # no number larger than 10_000
     query = f"""
-        SELECT * FROM candlesticks
-        LIMIT {n}
-        ;
+        SELECT open, close, high, low, timestamp, volume FROM candlesticks
+        WHERE exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and 
+              period=%(period)s and timestamp >= %(start)s and timestamp <= %(end)s
+        LIMIT {n} ;
     """
     try:
-        cur.execute(query)
+        cur.execute(query, info)
         results = cur.fetchall()
+        # TODO probably 
         df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
         return df
     except ps.OperationalError as e:
