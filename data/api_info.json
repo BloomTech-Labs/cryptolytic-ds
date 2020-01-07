@@ -20,11 +20,12 @@
             }
         },
         "bitfinex" : {
-            "api_call" : "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?limit={limit}&sort=-1",
+            "api_call" : "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?end={end}&limit={limit}&sort=-1",
             "exchanges" : {
                 "bitfinex" : {
                     "trading_pairs" : ["eth_btc", "btc_usd"]
                 }
-            }
+            },
+			"limit" : 5000
         }
 }

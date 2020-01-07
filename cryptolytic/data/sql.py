@@ -18,6 +18,33 @@ def get_credentials():
     }
 
 
+def get_conn():
+    conn = ps.connect(**sql.get_credentials())
+    cur = conn.cursor()
+    return conn, cursor
+
+
+def safe_q(q, return_conn=False, **kwargs):
+    conn, cur = get_conn()
+    try:
+        cur.execute(q, **kwargs)
+        if return_conn:
+            return conn, cur
+        else:
+            return cur
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+
+
+def safe_q1(q, **kwargs):
+    return safe_q(q, **kwargs).fetchone()
+
+
+def safe_qall(q, **kwargs):
+    return safe_q(q, **kwargs).fetchall()
+
+
 def sql_error(error):
     """
         Documentation: http://initd.org/psycopg/docs/errors.html
@@ -28,25 +55,13 @@ def sql_error(error):
 
 
 def check_tables():
-    creds = get_credentials()
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """SELECT * FROM pg_catalog.pg_tables
-               WHERE schemaname != 'pg_catalog'
-               AND schemaname != 'information_schema';"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    results = cur.fetchall()
-    print(results)
+    return safe_qall("""SELECT * FROM pg_catalog.pg_table
+                      WHERE schemaname != 'pg_catalog'
+                      AND schemaname != 'information_schema';""")
 
 
 def create_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """CREATE TABLE candlesticks
+    q = """CREATE TABLE candlesticks
                 (api text not null,
                  exchange text not null,
                  trading_pair text not null,
@@ -57,64 +72,30 @@ def create_candle_table():
                  high numeric not null,
                  low numeric not null,
                  volume numeric not null);"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    conn.commit()
+
+    conn, cur = safe_q(q, return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def drop_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """DROP TABLE IF EXISTS candlesticks;"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    conn.commit()
-
-
-def check_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    print('Checking Table candlesticks')
-    query = """SELECT * FROM candlesticks"""
-    cur.execute(query)
-    results = cur.fetchall()
-    print(results)
+    conn, cur = safe_q("DROP TABLE IF EXISTS candlesticks;", return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def get_table_schema(table_name):
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = f"""
-        select column_name, data_type, character_maximum_length
-        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
-    """
-    try:
-        cur.execute(query)
-        return cur.fetchall()
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+    q = """select column_name, data_type, character_maximum_length
+           from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s"""
+    return safe_qall(q, {'table_name': table_name})
 
 
 def get_table_columns(table_name):
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = f"""
+    q = """
         select column_name
-        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
-    """
-    try:
-        cur.execute(query)
-        return list(map(lambda x: x[0], cur.fetchall()))
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+        from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s;"""
+    results = safe_qall(q, {'table_name': table_name})
+    return list(map(lambda x: x[0], results))
 
 
 def add_candle_data_to_table(df, cur):
@@ -137,47 +118,46 @@ def add_candle_data_to_table(df, cur):
         args_str = ','.join(x)
     except Exception as e:
         print('ERROR', e)
-        
     try:
         cur.execute("INSERT INTO candlesticks VALUES" + args_str)
     except ps.OperationalError as e:
         sql_error(e)
-        return
+        retur
+
+
+def candlestick_to_sql(data):
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    dfdata = pd.concat(
+        [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
+                       ).drop(
+                           ['candles', 'candles_collected', 'last_timestamp'],
+                           axis=1)
+    add_candle_data_to_table(dfdata, cur)
+    conn.commit()
+
 
 def get_latest_date(exchange_id, trading_pair):
     """
         Return the latest date for a given trading pair on a given exchange
     """
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """
+    q = """
         SELECT timestamp FROM candlesticks
         WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
         ORDER BY timestamp desc
         LIMIT 1;
     """
-    latest_date = None
-    try:
-        cur.execute(query,
-                    {'exchange_id': exchange_id,
-                     'trading_pair': trading_pair})
-        latest_date = cur.fetchone()
-        if latest_date is not None:
-            return latest_date[0]
+    latest_date = safe_q1(q, {'exchange_id': exchange_id,
+                              'trading_pair': trading_pair})
+    if latest_date is None:
         print('No latest date')
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    return latest_date
 
+    return latest_date
 
 def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles
     """
-
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
     n = min(n, 10000) # no number larger than 10_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
@@ -196,33 +176,30 @@ def get_some_candles(info, n=100, verbose=False):
     where = add_clause(where, 'period', "period <= %(period)s")
     where = add_clause(where, 'trading_pair', "trading_pair=%(trading_pair)s")
 
-    print(where)
-
-    query = f"""
+    q = f"""
         SELECT {select} FROM candlesticks
         {where}
-        LIMIT {n} ;
+        LIMIT {n} 
+        ORDER BY timestamp desc;
+        """
+    results = safe_qall(q, info)
+    columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
+    df = pd.DataFrame(resluts, columns=columns)
+    return df
+
+
+def get_api(api):
+    q = "SELECT * FROM candlesticks WHERE api = %(api)s"
+    safe_qall(q, {'api': api})
+
+
+def remove_api(api):
     """
-    try:
-        cur.execute(query, info)
-        results = cur.fetchall()
-        columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
-        df = pd.DataFrame(results, columns=columns)
-        print('hello2')
-        return df
-    except ps.OperationalError as e:
-        print('hello')
-        sql_error(e)
-        return
-
-
-def candlestick_to_sql(data):
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    dfdata = pd.concat(
-        [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
-                       ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp'],
-                           axis=1)
-    add_candle_data_to_table(dfdata, cur)
-    conn.commit()
+    Drop API from candle table
+    """
+    conn, cur = get_conn()
+    q = """DELETE FROM candlesticks
+           WHERE api = %(api)s"""
+    conn, cur = safe_q(q, {'api' : api}, return_conn=True)
+    if conn is not None:
+        conn.commit()

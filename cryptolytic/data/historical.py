@@ -279,7 +279,7 @@ def live_update():
         print(api, exchange_id, trading_pair)
         start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 # timestamp is January 1st 2019
         period = 300 # 5 minutes
-        limit = 100 # limit to 100 candles
+        limit = api_info.get(api).get('limit') or 100 # limit to 100 candles if limit is not specified
 
         candle_info = get_from_api(api=api,
                                     exchange=exchange_id,

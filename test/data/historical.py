@@ -10,7 +10,8 @@ def live_update_test():
     assert (os.getenv('POSTGRES_DBNAME')=='cryptotestdb')
     sql.drop_candle_table()
     sql.create_candle_table()
+    h.live_update()
+    assert len(sql.get_some_candles({}, n=1000), verbose=True) >= 1000
 #    with timeout(minutes
-#    h.live_update()
 
 
