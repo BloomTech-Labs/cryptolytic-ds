@@ -47,11 +47,14 @@ def trading_pair_info(api, x):
     baseId, quoteId = x.split('_')
     handled = False
 
-    if api in {'cryptowatch', 'hitbtc', 'bitfinex'}:
+    if api_info.get(api).get("pair_no_underscore"):
         x = x.replace('_', '')
         handled = True
-    if api in {'poloniex', 'hitbtc', 'bitfinex'}:
+    if api_info.get(api).get("pair_uppercase"):
         x = x.upper()
+        handled = True
+    if api_info.get(api).get("pair_dash_seperator"):
+        x = x.replace('_', '-')
         handled = True
     if api in {'coincap'}:
         baseId = crypto_full_name(baseId).lower()
@@ -68,27 +71,14 @@ def trading_pair_info(api, x):
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick = candlestick.copy()
+    ohclv = ["open", "high", "close", "low", "volume"]
 
-    if api=='poloniex':
+    if api_info[api].get('candlestick_no_conversion'):
         pass
-    elif api=='coincap':
-        pass
-    elif api=='cryptowatch':
-        candlestick = {
-            'close'  : candlestick[0],
-            'open'   : candlestick[1],
-            'high'   : candlestick[2],
-            'low'    : candlestick[3],
-            'volume' : candlestick[4],
-        }
-    elif api=='bitfinex':
-        candlestick = {
-            'open'   : candlestick[1],
-            'close'  : candlestick[2],
-            'high'   : candlestick[3],
-            'low'    : candlestick[4],
-            'volume' : candlestick[5],
-        }
+    # reorder candlestick information
+    elif api_info[api].get('candlestick_order') is not None:
+        candlestick = {k: candlestick[i] for k, i in 
+                zip(ohclv, api_info[api].get('candlestick_order'))}
     elif api=='hitbtc':
         candlestick['high'] = candlestick.pop('max')
         candlestick['low'] = candlestick.pop('min')
@@ -97,8 +87,8 @@ def convert_candlestick(candlestick, api, timestamp):
 
     candlestick['timestamp'] = timestamp
     # only keep these keys, otherwise can mess up insertion
-    filtered_candlestick = {key: candlestick[key] for key in ['timestamp', 'open', 'close', 'high', 'low', 'volume']}
-    return filtered_candlestick
+    return {key: candlestick[key] for key in ['timestamp']+ohclv}
+
 
 
 def format_apiurl(api, params={}):
@@ -110,9 +100,12 @@ def format_apiurl(api, params={}):
     # Coincap expects milliseconds in its url query
     if api_info.get(api).get("timestamp_format") == "milliseconds":
         params['start'] *= 1000
-        params['end'] *= 1000
+        params['end']  *= 1000
+    if api_info.get(api).get("timestamp_format") == "iso8601":
+        params['start'] = datetime.utcfromtimestamp(params['start'])
+        params['end'] = datetime.utcfromtimestamp(params['end'])
     # Standard URL query
-    elif api_info.get(api).get("timestamp_format") == "seconds":
+    if api_info.get(api).get("timestamp_format") == "seconds":
         pass
     elif api_info.get(api) is None:
         # Hasn't been verified
@@ -162,10 +155,10 @@ def conform_json_response(api, json_response):
         return json_response['result'][str(period)]  # TODO fix
     elif api=='coincap':
         return json_response['data']
-    elif api in {'poloniex', 'hitbtc', 'bitfinex'}:
+    elif api in {'poloniex', 'hitbtc', 'bitfinex', 'coinbase'}:
         return json_response
     else:
-        raise Exception('API not supported', api)
+        raise Exception('API not supported', api, 'Response was ', json_response)
     return None
 
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
@@ -224,6 +217,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
 
     # Check if candle schema is valid
     candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
+    print('oaetnuaoehtnutcnaoehtutoeahutnaoesoehoetnhunshaoeu',candles[0])
     assert all(x in candles[0].keys() for x in candle_schema)
     
     # return the candlestick information
