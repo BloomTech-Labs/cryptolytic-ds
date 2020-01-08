@@ -23,6 +23,7 @@
       }
     },
     "timestamp_format": "milliseconds",
+    "candle_timestamp_format": "milliseconds",
     "time_interval": {
       "weeks": [
         1
@@ -43,8 +44,7 @@
         15,
         30
       ]
-    },
-    "candlestick_no_conversion": true
+    }
   },
   "hitbtc": {
     "api_call": "https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
@@ -76,7 +76,9 @@
     },
     "uppercase_timeinterval": true,
     "pair_no_underscore": true,
-    "pair_uppercase": true
+    "pair_uppercase": true,
+    "limit": 1000,
+    "candle_timestamp_format": "iso8601"
   },
   "bitfinex": {
     "api_call": "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?start={start}&end={end}&limit={limit}&sort=-1",
@@ -90,6 +92,7 @@
     },
     "limit": 5000,
     "timestamp_format": "milliseconds",
+    "candle_timestamp_format": "milliseconds",
     "time_interval": {
       "minutes": [
         1,
@@ -117,7 +120,8 @@
       3,
       2,
       4,
-      5
+      5,
+      0
     ]
   },
   "coinbase": {
@@ -136,9 +140,10 @@
     "candlestick_order": [
       3,
       2,
-      1,
       4,
-      5
+      1,
+      5,
+      0
     ],
     "limit": 300
   },

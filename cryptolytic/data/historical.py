@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 import logging
+import ciso8601
 
 
 # Json conversion dictionary for cryptocurrency abbreviations
@@ -70,25 +71,47 @@ def trading_pair_info(api, x):
 
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
+    candlestick_old = candlestick
     candlestick = candlestick.copy()
-    ohclv = ["open", "high", "close", "low", "volume"]
+    ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
+    corder = api_info[api].get('candlestick_order')
 
     if api_info[api].get('candlestick_no_conversion'):
         pass
     # reorder candlestick information
-    elif api_info[api].get('candlestick_order') is not None:
+    elif corder is not None:
         candlestick = {k: candlestick[i] for k, i in 
-                zip(ohclv, api_info[api].get('candlestick_order'))}
+                       zip(ohclv, corder)}
     elif api=='hitbtc':
         candlestick['high'] = candlestick.pop('max')
         candlestick['low'] = candlestick.pop('min')
+    elif api=='coincap':
+        candlestick['timestamp'] = candlestick.pop('period')
     else:
         raise Exception('API not supported ', api)
 
-    candlestick['timestamp'] = timestamp
-    # only keep these keys, otherwise can mess up insertion
-    return {key: candlestick[key] for key in ['timestamp']+ohclv}
+    timestamp_format = api_info.get(api).get("candle_timestamp_format")
+    try:
+        if timestamp_format == "milliseconds":
+            candlestick['timestamp'] = candlestick['timestamp'] // 1000
+        elif timestamp_format == "iso8601":
+            candlestick['timestamp'] = int(ciso8601.parse_datetime(candlestick['timestamp']).timestamp())
+        elif timestamp == "replace":
+            candlestick['timestamp'] = timestamp
 
+        # Check if candle schema is valid
+        candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
+
+        # no less than year 2000 or greater than 2030. timesamp must be an int
+        if (not all(x in candlestick.keys() for x in candle_schema)) or \
+           not isinstance(candlestick['timestamp'], int) or candlestick['timestamp'] >= 1894131876 or candlestick['timestamp'] <= 947362914: 
+            raise Exception()
+    except Exception:
+        raise Exception("API: ", api, "\nInvalid Candle: ", candlestick, "\nOld candle: ", candlestick_old)
+
+#    candlestick['timestamp'] = timestamp
+    # only keep these keys, otherwise can mess up insertion
+    return {key: candlestick[key] for key in ohclv}
 
 
 def format_apiurl(api, params={}):
@@ -149,6 +172,7 @@ def get_time_interval(api, period):
 
     return interval
 
+
 def conform_json_response(api, json_response):
     """Get the right data from the json response. Expects a list, either like [[],...], or like [{},..]"""
     if api=='cryptowatch':
@@ -161,10 +185,11 @@ def conform_json_response(api, json_response):
         raise Exception('API not supported', api, 'Response was ', json_response)
     return None
 
+
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
-                 start=1546300800, limit=100, period=60, apikey=None):
-    """period : candlestick length in seconds. Default 60 seconds.
-      
+                 start=1546300800, limit=100, period=300, apikey=None):
+    """period: candlestick length in seconds. Default 300 seconds.
+       limit: number of candles to pull
     """
     if api in {'cryptowatch'} and apikey==None:
         raise Exception('Missing API key')
@@ -211,16 +236,21 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
     candles = []
     current_timestamp = start
     for candle in candlestick_info:
-        current_timestamp += period
+        # current_timestamp += period
         candlenew = convert_candlestick(candle, api, current_timestamp)
+        current_timestamp = candlenew['timestamp']
         candles.append(candlenew)
 
+    expected_length = (end-start)//period
+    print(json_response)
+    print(len(candles), expected_length)
+    # assert len(candles) >= expected_length
+    
     # Check if candle schema is valid
     candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
-    print('oaetnuaoehtnutcnaoehtutoeahutnaoesoehoetnhunshaoeu',candles[0])
     assert all(x in candles[0].keys() for x in candle_schema)
-    
     # return the candlestick information
+
     return dict(
         api=api,
         exchange=exchange,
@@ -238,6 +268,17 @@ def yield_unique_pair():
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
                 yield (api, exchange_id, trading_pair)
+
+
+def sample_every_pair(n=3000):
+    df = pd.DataFrame()
+    for api, exchange_id, trading_pair in yield_unique_pair():
+        df = df.append(sql.get_some_candles(
+                    {'api': api, 
+                     'exchange_id': exchange_id, 
+                     'trading_pair': trading_pair}, 
+                    n, verbose=True))
+    return df
 
            
 def live_update():
