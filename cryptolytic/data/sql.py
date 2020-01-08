@@ -19,15 +19,16 @@ def get_credentials():
 
 
 def get_conn():
-    conn = ps.connect(**sql.get_credentials())
-    cur = conn.cursor()
+    conn = ps.connect(**get_credentials())
+    cursor = conn.cursor()
     return conn, cursor
 
 
-def safe_q(q, return_conn=False, **kwargs):
+def safe_q(q,  args={}, return_conn=False):
+    """Safe sql query"""
     conn, cur = get_conn()
     try:
-        cur.execute(q, **kwargs)
+        cur.execute(q, args)
         if return_conn:
             return conn, cur
         else:
@@ -37,12 +38,14 @@ def safe_q(q, return_conn=False, **kwargs):
         return
 
 
-def safe_q1(q, **kwargs):
-    return safe_q(q, **kwargs).fetchone()
+def safe_q1(q, args={}, return_conn=False):
+    result = safe_q(q, args, return_conn).fetchone()
+    if result is not None:
+        return result[0]
 
 
-def safe_qall(q, **kwargs):
-    return safe_q(q, **kwargs).fetchall()
+def safe_qall(q, args={}, return_conn=False):
+    return safe_q(q, args, return_conn).fetchall()
 
 
 def sql_error(error):
@@ -122,7 +125,7 @@ def add_candle_data_to_table(df, cur):
         cur.execute("INSERT INTO candlesticks VALUES" + args_str)
     except ps.OperationalError as e:
         sql_error(e)
-        retur
+        return
 
 
 def candlestick_to_sql(data):
@@ -158,7 +161,7 @@ def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles
     """
-    n = min(n, 10000) # no number larger than 10_000
+    n = min(n, 50000) # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
 
@@ -179,12 +182,12 @@ def get_some_candles(info, n=100, verbose=False):
     q = f"""
         SELECT {select} FROM candlesticks
         {where}
-        LIMIT {n} 
-        ORDER BY timestamp desc;
+        ORDER BY timestamp desc
+        LIMIT {n};
         """
     results = safe_qall(q, info)
     columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
-    df = pd.DataFrame(resluts, columns=columns)
+    df = pd.DataFrame(results, columns=columns)
     return df
 
 
@@ -197,7 +200,6 @@ def remove_api(api):
     """
     Drop API from candle table
     """
-    conn, cur = get_conn()
     q = """DELETE FROM candlesticks
            WHERE api = %(api)s"""
     conn, cur = safe_q(q, {'api' : api}, return_conn=True)

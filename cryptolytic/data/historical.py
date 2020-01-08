@@ -12,6 +12,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from collections import deque
+import logging
 
 
 # Json conversion dictionary for cryptocurrency abbreviations
@@ -29,13 +30,14 @@ with open('data/api_info.json', 'r') as f:
     api_info = json.load(f)
 assert len(api_info) > 1
 
-# TODO consider putting into a more general file
+
 def crypto_full_name(crypto_short):
     """crypto_short: e.g. eth, btc
        result: e.g. Ethereum, Bitcoin"""
-    #print(crypto_name_table)
+    # print(crypto_name_table)
     lookup = crypto_name_table.get(crypto_short.upper())
     return lookup
+
 
 def trading_pair_info(api, x):
     """Returns full info for the trading pair necessary for the exchange.
@@ -58,9 +60,10 @@ def trading_pair_info(api, x):
     if not handled:
         raise Exception('API not supported ', api)
 
-    return {'baseId' : baseId,
-            'quoteId' : quoteId,
-            'trading_pair' : x}
+    return {'baseId'      : baseId,
+            'quoteId'     : quoteId,
+            'trading_pair': x}
+
 
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
@@ -72,18 +75,18 @@ def convert_candlestick(candlestick, api, timestamp):
         pass
     elif api=='cryptowatch':
         candlestick = {
-            'close' : candlestick[0],
-            'open'  : candlestick[1],
-            'high'  : candlestick[2],
-            'low'   : candlestick[3],
+            'close'  : candlestick[0],
+            'open'   : candlestick[1],
+            'high'   : candlestick[2],
+            'low'    : candlestick[3],
             'volume' : candlestick[4],
         }
     elif api=='bitfinex':
         candlestick = {
-            'open'  : candlestick[1],
-            'close' : candlestick[2],
-            'high'  : candlestick[3],
-            'low'   : candlestick[4],
+            'open'   : candlestick[1],
+            'close'  : candlestick[2],
+            'high'   : candlestick[3],
+            'low'    : candlestick[4],
             'volume' : candlestick[5],
         }
     elif api=='hitbtc':
@@ -97,51 +100,40 @@ def convert_candlestick(candlestick, api, timestamp):
     filtered_candlestick = {key: candlestick[key] for key in ['timestamp', 'open', 'close', 'high', 'low', 'volume']}
     return filtered_candlestick
 
+
 def format_apiurl(api, params={}):
+    """
+        Format the url to get the candle data for the given api
+    """
     url = None
     params = params.copy()
     # Coincap expects milliseconds in its url query
-    if api in {'coincap'}:
+    if api_info.get(api).get("timestamp_format") == "milliseconds":
         params['start'] *= 1000
         params['end'] *= 1000
     # Standard URL query
-    if api in {'cryptowatch', 'poloniex', 'coincap', 'hitbtc', 'bitfinex'}:
-        url = api_info[api]['api_call'].format(**params)
-    # Hasn't been verified
-    else:
+    elif api_info.get(api).get("timestamp_format") == "seconds":
+        pass
+    elif api_info.get(api) is None:
+        # Hasn't been verified
         raise Exception('API not supported', api)
+    url = api_info[api]['api_call'].format(**params)
     print(url)
     return url
 
+
 # Coincap uses time intervals like h1, m15 etc. so need a function to convert to the seconds to that format
 def get_time_interval(api, period):
-    """For coincap, hitbtc, etc. which use a format like 'm1' instead of period like 60 for 60 seconds."""
+    """For coincap, hitbtc, etc. which use a format like 'm1' instead of
+       period like 60 for 60 seconds."""
     minutes = period / 60
     hours = minutes / 60
     days = hours / 24
     weeks = days / 7
 
-    accepted_values = {
-        'coincap' : {
-            'weeks' : [1],
-            'days' : [1],
-            'hours' : [1, 2, 4, 8, 12],
-            'minutes' : [1, 5, 15, 30],
-        },
-        'hitbtc' : {
-            'days' : [1, 7],
-            'hours' : [1, 4],
-            'minutes' : [1, 3, 5, 15, 30]
-        },
-        'bitfinex' : {
-            'minutes' : [1, 5, 15, 30],
-            'hours' : [1, 3, 6, 12],
-            'days' : [1, 7, 14],
-        }
-    }.get(api)
+    accepted_values = api_info.get(api).get("time_interval")
 
-
-    if accepted_values == None:
+    if accepted_values is None:
         raise Exception('API not supported', api)
     elif weeks >= 1 and accepted_values.has('weeks'):
         x = list(filter(lambda x: x<=weeks, accepted_values['weeks']))
@@ -157,9 +149,9 @@ def get_time_interval(api, period):
         interval = 'm'+str(np.max(x))
 
     # expects uppercase like 'M1' for 1 minute
-    if api in {'hitbtc'}:
+    if api_info.get(api).get("uppercase_timeinterval"):
         interval = interval.upper()
-    if api in {'bitfinex'}: # expect 1m format instead
+    elif api_info.get(api).get("reverse_timeinterval"):  # expect 1m format instead
         interval = interval[1:] + interval[0]
 
     return interval
@@ -167,7 +159,7 @@ def get_time_interval(api, period):
 def conform_json_response(api, json_response):
     """Get the right data from the json response. Expects a list, either like [[],...], or like [{},..]"""
     if api=='cryptowatch':
-        return json_response['result'][str(period)] # TODO fix
+        return json_response['result'][str(period)]  # TODO fix
     elif api=='coincap':
         return json_response['data']
     elif api in {'poloniex', 'hitbtc', 'bitfinex'}:
@@ -189,10 +181,10 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
 
     # Variable initialization
     pair_info = trading_pair_info(api, trading_pair)
-    baseId = pair_info.get('baseId') # the first coin in the pair
-    quoteId = pair_info.get('quoteId') # the second coin in the pair
-    trading_pair_api = pair_info.get('trading_pair') # e.g. eth_usd in the form of what the api expects
-    start = start # start time unix timestamp
+    baseId = pair_info.get('baseId')  # the first coin in the pair
+    quoteId = pair_info.get('quoteId')  # the second coin in the pair
+    trading_pair_api = pair_info.get('trading_pair')  # e.g. eth_usd in the form of what the api expects
+    start = start  # start time unix timestamp
     end = start+period*limit  # end time unix timestamp
     assert start < end
 
@@ -236,13 +228,13 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
     
     # return the candlestick information
     return dict(
-        api = api,
-        exchange = exchange,
+        api=api,
+        exchange=exchange,
         candles=candles,
-        last_timestamp  = current_timestamp,
-        trading_pair = trading_pair,
-        candles_collected = len(candles),
-        period = period) # period in seconds
+        last_timestamp=current_timestamp,
+        trading_pair=trading_pair,
+        candles_collected=len(candles),
+        period=period)  # period in seconds
             
 
 def yield_unique_pair():
@@ -259,9 +251,7 @@ def live_update():
         Updates the database based on the info in data/api_info.json with new candlestick info,
         grabbing data from the last timestamp until now, with the start date set at the start of 2019.
     """
-
-
-    now = time.time() # time now
+    now = time.time()
 
     # use a deque to rotate the tasks, and pop them when they are done. 
     # this is to avoid sending too many requests to one api at once.
@@ -274,25 +264,25 @@ def live_update():
         if len(d)==0:
             break
 
-        api, exchange_id, trading_pair  = d[-1] # get the current task
+        api, exchange_id, trading_pair  = d[-1]  # get the current task
         
         print(api, exchange_id, trading_pair)
-        start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800 # timestamp is January 1st 2019
-        period = 300 # 5 minutes
-        limit = api_info.get(api).get('limit') or 100 # limit to 100 candles if limit is not specified
+        start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800  # timestamp is January 1st 2019
+        period = 300  # 5 minutes
+        limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
 
         candle_info = get_from_api(api=api,
-                                    exchange=exchange_id,
-                                    trading_pair=trading_pair,
-                                    start=start,
-                                    period=period,
-                                    limit=limit)
+                                   exchange=exchange_id,
+                                   trading_pair=trading_pair,
+                                   start=start,
+                                   period=period,
+                                   limit=limit)
         
         # last candle is up to date with current time, done updating for this trading_pair on this exchange
         if candle_info['last_timestamp'] >= round(now)-period:
-            d.pop() # pop task when done
+            d.pop()  # pop task when done
         else:
-            d.rotate(1) # rotate the task
+            d.rotate(1)  # rotate the task
 
         # Log the timestamp
         ts = candle_info['last_timestamp']
@@ -303,16 +293,3 @@ def live_update():
             sql.candlestick_to_sql(candle_info)
         except Exception as e:
             print(e)
-
-
-def check_table(df):
-    "Check's dataframe to make sure it has every api, exchange, and trading pair from data/api_info.json"
-    assert df['api'].nunique() == len(api_info.keys()) - 1
-    for api in df['api'].unique():
-        df_api = df[df['api'] == api]
-        assert df_api['exchange'].nunique() == len(api_info[api]['exchanges'].keys())
-        for exchange in df_api['exchange'].unique():
-            df_exchange = df_api[df_api['exchange']==exchange]
-            assert df_exchange['trading_pair'].nunique() == len(api_info[api]['exchanges'][exchange]['trading_pairs'])
-
-            
