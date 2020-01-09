@@ -24,7 +24,7 @@ def sql_error(error):
     """
     # TODO put into log or something
     print("SQL Error:")
-    print(f"Error Code: {e.pgcode}\n")
+    print(f"Error Code: {error.pgcode}\n")
 
 
 def check_tables():
@@ -122,23 +122,27 @@ def add_candle_data_to_table(df, cur):
         Builds a string from our data-set using the mogrify method which is
         then called once using the execute method
     """
+ 
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
     df['timestamp'] = df['timestamp'].apply(str)
 
-    x = [
-        str(
-            cur.mogrify(query, row), encoding='utf-8'
-            ) for row in df[order].values
-        ]
-    args_str = ','.join(x)
+    try:
+        x = [
+            str(
+                cur.mogrify(query, row), encoding='utf-8'
+                ) for row in df[order].values]
+
+        args_str = ','.join(x)
+    except Exception as e:
+        print('ERROR', e)
+        
     try:
         cur.execute("INSERT INTO candlesticks VALUES" + args_str)
     except ps.OperationalError as e:
         sql_error(e)
         return
-
 
 def get_latest_date(exchange_id, trading_pair):
     """
@@ -160,26 +164,29 @@ def get_latest_date(exchange_id, trading_pair):
         latest_date = cur.fetchone()
         if latest_date is not None:
             return latest_date[0]
+        print('No latest date')
     except ps.OperationalError as e:
         sql_error(e)
         return
     return latest_date
 
-
-def get_some_candles(n=100):
+def get_some_candles(info, n=100):
     """
         Return n candles
     """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
+    n = min(n, 10000) # no number larger than 10_000
     query = f"""
-        SELECT * FROM candlesticks
-        LIMIT {n}
-        ;
+        SELECT open, close, high, low, timestamp, volume FROM candlesticks
+        WHERE exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and 
+              period=%(period)s and timestamp >= %(start)s and timestamp <= %(end)s
+        LIMIT {n} ;
     """
     try:
-        cur.execute(query)
+        cur.execute(query, info)
         results = cur.fetchall()
+        # TODO probably 
         df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
         return df
     except ps.OperationalError as e:
