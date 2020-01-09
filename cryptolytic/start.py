@@ -1,9 +1,16 @@
 import json
 import logging
+import sys
 from dotenv import load_dotenv
 
 def start_logging():
     logging.basicConfig(level=logging.DEBUG, filename="log.txt")
+
+    # also print to stderr
+    stderrLogger=logging.StreamHandler()
+    stderrLogger.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
+    logging.getLogger().addHandler(stderrLogger)
+
     w = 20
     logging.debug(' '*w)
     logging.debug('-'*w) 

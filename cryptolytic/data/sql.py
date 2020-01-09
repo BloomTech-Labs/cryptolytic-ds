@@ -1,6 +1,7 @@
 import psycopg2 as ps
 import os
 from cryptolytic.data import historical
+import cryptolytic.util.date as date
 import time
 import pandas as pd
 import json
@@ -164,6 +165,17 @@ def get_some_candles(info, n=100, verbose=False):
     n = min(n, 50000) # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
+    
+    # make sure dates are of right format
+    if 'start' in info:
+        info['start'] = date.convert_datetime(info['start'])
+    if 'end' in info:
+        info['end'] = date.convert_datetime(info['end']) 
+
+#    # start is supplied but end is not
+#    if 'start' in info and 'end' not in info:
+#        period = info.get('period') or 300
+#        info['end'] = info['start'] + n * period
 
     def add_clause(where, key, clause):
         if key in info.keys():
@@ -176,20 +188,27 @@ def get_some_candles(info, n=100, verbose=False):
     where = add_clause(where, 'exchange_id', "exchange=%(exchange_id)s")
     where = add_clause(where, 'start', "timestamp >= %(start)s")
     where = add_clause(where, 'end', "timestamp <= %(end)s")
-    where = add_clause(where, 'period', "period <= %(period)s")
+    where = add_clause(where, 'period', "period = %(period)s")
     where = add_clause(where, 'trading_pair', "trading_pair=%(trading_pair)s")
 
     q = f"""
         SELECT {select} FROM candlesticks
         {where}
-        ORDER BY timestamp desc
+        ORDER BY timestamp asc
         LIMIT {n};
         """
     results = safe_qall(q, info)
     columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
-    df = pd.DataFrame(results, columns=columns)
+    # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
+    df = pd.DataFrame(results, columns=columns)  
     return df
 
+
+def get_candles(info, n=100, verbose=False):
+    df = get_some_candles(info, n, verbose)
+    numeric = ['period', 'open', 'close', 'high', 'low', 'volume']
+    df[numeric] = df[numeric].apply(pd.to_numeric)
+    return df
 
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
@@ -204,4 +223,5 @@ def remove_api(api):
            WHERE api = %(api)s"""
     conn, cur = safe_q(q, {'api' : api}, return_conn=True)
     if conn is not None:
+        print(f"Removed {api}")
         conn.commit()
