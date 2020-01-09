@@ -141,22 +141,25 @@ def candlestick_to_sql(data):
     conn.commit()
 
 
-def get_latest_date(exchange_id, trading_pair):
+def get_latest_date(exchange_id, trading_pair, period):
     """
         Return the latest date for a given trading pair on a given exchange
     """
     q = """
         SELECT timestamp FROM candlesticks
-        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
         ORDER BY timestamp desc
         LIMIT 1;
     """
     latest_date = safe_q1(q, {'exchange_id': exchange_id,
-                              'trading_pair': trading_pair})
+                              'trading_pair': trading_pair,
+                              'period': period
+                              })
     if latest_date is None:
         print('No latest date')
 
     return latest_date
+
 
 def get_some_candles(info, n=100, verbose=False):
     """
