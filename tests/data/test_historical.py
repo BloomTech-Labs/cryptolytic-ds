@@ -5,7 +5,7 @@ import cryptolytic.data.historical as h
 import cryptolytic.data.sql as sql
 import concurrent.futures as futures
 
-from test.start import init
+from tests.start import init
 init()  # set enviornemnt variable
 
 def _assert(x):
