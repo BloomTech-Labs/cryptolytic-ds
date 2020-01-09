@@ -25,25 +25,32 @@ class TestApp(unittest.TestCase):
         response1 = requests.get("""http://45.56.119.8/arbitrage?
                                 exchanges=binance&trading_pair=btc_usd""")
         response2 = requests.get("""http://45.56.119.8/arbitrage?
-                                exchanges=binance&trading_pair=btc_usd""") 
+                                exchanges=binance&trading_pair=btc_usd""")
         # Self assert-equaal
         self.assertEqual(response1,response2)
     def test_candles(self):
-        response1 = requests.get("""http://45.56.119.8/trade_candles?
-                                exchange_id="binance"&trading_pair="eth_btc"&
-                                start=1578589625&end=1578589625&period=1"""
-                                )
-        response2 = requests.get("""http://45.56.119.8/trade_candles?
-                                exchange_id="binance"&trading_pair="eth_btc"&
-                                start=1578589625&end=1578589625&period=1"""
-                                ) 
+        response1 = requests.post(url = "http://45.56.119.8/trade_candles",
+ data = """
+"exchange_id":"binance",
+"trading_pair": "eth_btc",
+"period": 300,
+"start": 1546322400,
+"end": 1546325500""") 
+        response2 = requests.post(url = "http://45.56.119.8/trade_candles",
+ data = """
+"exchange_id":"binance",
+"trading_pair": "eth_btc",
+"period": 300,
+"start": 1546322400,
+"end": 1546325500""") 
+
         # Self assert-equal
         self.assertEqual(response1,response2)
         print("Response 1:", response1)
         print("Response 2:", response2)
         for i,c in zip(response1,response2):
             if i != c:
-                print("Iteration Zip != !!!") 
+                print("Iteration Zip != !!!")
     # Error Testing ----------->
     def test_error(self):
         self.assertRaises(ZeroDivisionError, application, 0)
