@@ -141,18 +141,20 @@ def candlestick_to_sql(data):
     conn.commit()
 
 
-def get_latest_date(exchange_id, trading_pair):
+def get_latest_date(exchange_id, trading_pair, period):
     """
         Return the latest date for a given trading pair on a given exchange
     """
     q = """
         SELECT timestamp FROM candlesticks
-        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
         ORDER BY timestamp desc
         LIMIT 1;
     """
     latest_date = safe_q1(q, {'exchange_id': exchange_id,
-                              'trading_pair': trading_pair})
+                              'trading_pair': trading_pair,
+                              'period': period
+                              })
     if latest_date is None:
         print('No latest date')
 
@@ -162,20 +164,17 @@ def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles
     """
-    n = min(n, 50000) # no number larger than 50_000
+    n = min(n, 50000)  # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
+
+    assert 'period' in info.keys()  # Require period information
     
     # make sure dates are of right format
     if 'start' in info:
         info['start'] = date.convert_datetime(info['start'])
     if 'end' in info:
         info['end'] = date.convert_datetime(info['end']) 
-
-#    # start is supplied but end is not
-#    if 'start' in info and 'end' not in info:
-#        period = info.get('period') or 300
-#        info['end'] = info['start'] + n * period
 
     def add_clause(where, key, clause):
         if key in info.keys():
