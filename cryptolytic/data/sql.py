@@ -165,20 +165,17 @@ def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles
     """
-    n = min(n, 50000) # no number larger than 50_000
+    n = min(n, 50000)  # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
+
+    assert 'period' in info.keys()  # Require period information
     
     # make sure dates are of right format
     if 'start' in info:
         info['start'] = date.convert_datetime(info['start'])
     if 'end' in info:
         info['end'] = date.convert_datetime(info['end']) 
-
-#    # start is supplied but end is not
-#    if 'start' in info and 'end' not in info:
-#        period = info.get('period') or 300
-#        info['end'] = info['start'] + n * period
 
     def add_clause(where, key, clause):
         if key in info.keys():
