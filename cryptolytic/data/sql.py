@@ -107,7 +107,7 @@ def add_candle_data_to_table(df, cur):
         Builds a string from our data-set using the mogrify method which is
         then called once using the execute method
     """
- 
+
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"

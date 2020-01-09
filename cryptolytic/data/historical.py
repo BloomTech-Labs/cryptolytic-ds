@@ -277,7 +277,7 @@ def sample_every_pair(n=3000, query={}):
     return df
 
            
-def live_update():
+def live_update(period = 300): # Period default is 5 minutes
     """
         Updates the database based on the info in data/api_info.json with new candlestick info,
         grabbing data from the last timestamp until now, with the start date set at the start of 2019.
@@ -299,7 +299,6 @@ def live_update():
         
         print(api, exchange_id, trading_pair)
         start = sql.get_latest_date(exchange_id, trading_pair) or 1546300800  # timestamp is January 1st 2019
-        period = 300  # 5 minutes
         limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
         candle_info = None
 
