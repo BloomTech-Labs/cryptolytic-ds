@@ -1,30 +1,155 @@
 {
-		"cryptowatch" : {
-            "api_call" : "https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
-            "exchanges" : {}
-        },
-		"coincap" : {
-            "api_call" :"http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
-            "exchanges" : {
-                "binance" : {
-                    "trading_pairs" : ["eth_btc", "btc_usdt"]
-                }
-            }
-        },
-        "hitbtc" : {
-            "api_call" :"https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
-            "exchanges" : {
-                "hitbtc" : {
-                    "trading_pairs" : ["eth_btc", "btc_usd"]
-                }
-            }
-        },
-        "bitfinex" : {
-            "api_call" : "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?limit={limit}&sort=-1",
-            "exchanges" : {
-                "bitfinex" : {
-                    "trading_pairs" : ["eth_btc", "btc_usd"]
-                }
-            }
-        }
+  "cryptowatch": {
+    "api_call": "https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
+    "exchanges": {},
+    "timestamp_format": "seconds",
+    "pair_no_underscore": true,
+    "candlestick_order": [
+      1,
+      2,
+      0,
+      3,
+      4
+    ]
+  },
+  "coincap": {
+    "api_call": "http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
+    "exchanges": {
+      "binance": {
+        "trading_pairs": [
+          "eth_btc",
+          "btc_usdt"
+        ]
+      }
+    },
+    "timestamp_format": "milliseconds",
+    "candle_timestamp_format": "milliseconds",
+    "time_interval": {
+      "weeks": [
+        1
+      ],
+      "days": [
+        1
+      ],
+      "hours": [
+        1,
+        2,
+        4,
+        8,
+        12
+      ],
+      "minutes": [
+        1,
+        5,
+        15,
+        30
+      ]
+    }
+  },
+  "hitbtc": {
+    "api_call": "https://api.hitbtc.com/api/2/public/candles/{trading_pair}?period={interval}&from={start}&limit={limit}",
+    "exchanges": {
+      "hitbtc": {
+        "trading_pairs": [
+          "eth_btc",
+          "btc_usd"
+        ]
+      }
+    },
+    "timestamp_format": "seconds",
+    "time_interval": {
+      "days": [
+        1,
+        7
+      ],
+      "hours": [
+        1,
+        4
+      ],
+      "minutes": [
+        1,
+        3,
+        5,
+        15,
+        30
+      ]
+    },
+    "uppercase_timeinterval": true,
+    "pair_no_underscore": true,
+    "pair_uppercase": true,
+    "limit": 1000,
+    "candle_timestamp_format": "iso8601"
+  },
+  "bitfinex": {
+    "api_call": "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?start={start}&end={end}&limit={limit}&sort=-1",
+    "exchanges": {
+      "bitfinex": {
+        "trading_pairs": [
+          "eth_btc",
+          "btc_usd"
+        ]
+      }
+    },
+    "limit": 5000,
+    "timestamp_format": "milliseconds",
+    "candle_timestamp_format": "milliseconds",
+    "time_interval": {
+      "minutes": [
+        1,
+        5,
+        15,
+        30
+      ],
+      "hours": [
+        1,
+        3,
+        6,
+        12
+      ],
+      "days": [
+        1,
+        7,
+        14
+      ]
+    },
+    "reverse_timeinterval": true,
+    "pair_no_underscore": true,
+    "pair_uppercase": true,
+    "candlestick_order": [
+      1,
+      3,
+      2,
+      4,
+      5,
+      0
+    ]
+  },
+  "coinbase": {
+    "api_call": "https://api.pro.coinbase.com/products/{trading_pair}/candles/?granularity={period}&start={start}&end={end}",
+    "exchanges": {
+      "coinbase": {
+        "trading_pairs": [
+          "eth_btc",
+          "btc_usd"
+        ]
+      }
+    },
+    "timestamp_format": "iso8601",
+    "pair_uppercase": true,
+    "pair_dash_seperator": true,
+    "candlestick_order": [
+      3,
+      2,
+      4,
+      1,
+      5,
+      0
+    ],
+    "limit": 300
+  },
+  "poloniex": {
+    "pair_uppercase": true,
+    "candlestick_no_conversion": true,
+    "exchanges": {}
+  }
 }
