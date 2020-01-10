@@ -160,6 +160,7 @@ def get_latest_date(exchange_id, trading_pair, period):
 
     return latest_date
 
+
 def get_some_candles(info, n=100, verbose=False):
     """
         Return n candles

@@ -237,12 +237,8 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
         candlenew = convert_candlestick(candle, api, current_timestamp)
         current_timestamp = candlenew['timestamp']
         candles.append(candlenew)
-    
-    # Check if candle schema is valid
-    candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
-    assert all(x in candles[0].keys() for x in candle_schema)
-    # return the candlestick information
 
+    # return the candlestick information
     return dict(
         api=api,
         exchange=exchange,
@@ -251,7 +247,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
         trading_pair=trading_pair,
         candles_collected=len(candles),
         period=period)  # period in seconds
-            
+
 
 def yield_unique_pair():
     """Yield unique trading pair"""
