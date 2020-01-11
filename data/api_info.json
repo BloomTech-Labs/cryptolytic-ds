@@ -81,7 +81,7 @@
     "candle_timestamp_format": "iso8601"
   },
   "bitfinex": {
-    "api_call": "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?start={start}&end={end}&limit={limit}&sort=-1",
+    "api_call": "https://api-pub.bitfinex.com/v2/candles/trade:{interval}:t{trading_pair}/hist?start={start}&limit={limit}&sort=1",
     "exchanges": {
       "bitfinex": {
         "trading_pairs": [
