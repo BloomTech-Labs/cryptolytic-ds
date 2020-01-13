@@ -210,6 +210,7 @@ def get_candles(info, n=100, verbose=False):
     df[numeric] = df[numeric].apply(pd.to_numeric)
     return df
 
+
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
     safe_qall(q, {'api': api})

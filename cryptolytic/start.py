@@ -4,7 +4,7 @@ import sys
 from dotenv import load_dotenv
 
 def start_logging():
-    logging.basicConfig(level=logging.DEBUG, filename="log.txt")
+    logging.basicConfig(filename="log.txt")
 
     # also print to stderr
     stderrLogger=logging.StreamHandler()
