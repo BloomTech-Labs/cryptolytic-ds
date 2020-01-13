@@ -269,7 +269,21 @@ def sample_every_pair(n=3000, query={}):
     df = pd.DataFrame()
     # can't specify these with this function
     assert not {'api', 'exchange_id', 'trading_pair'}.issubset(query)
-    for api, exchange_id, trading_pair in yield_unique_pair():
+
+    def dict_matches(cond, b):
+        return set(cond.items()).issubset(set(b.items()))
+
+    def select_keys(d, keys):
+        return {k: d[k] for k in keys}
+
+    def filter_pairs():
+        keys = ['api', 'exchange_id', 'trading_pair']
+        thing = select_keys(query, keys)
+        return filter(lambda pair: 
+                      dict_matches(thing, dict(zip(keys, pair))), 
+                      yield_unique_pair())
+
+    for api, exchange_id, trading_pair in filter_pairs():
         d = {'api': api,
              'exchange_id': exchange_id,
              'trading_pair': trading_pair}
@@ -303,11 +317,17 @@ def live_update(period = 300): # Period default is 5 minutes
         print(api, exchange_id, trading_pair)
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
         if force_start != 0:
-            start = force_start
+            start = force_start  # set start to force start if force start is not zero
+
+        # already at the latest date
+        if start >= round(now)-period:
+            d.pop()
+            continue
+
         limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
         candle_info = None
 
-        try: 
+        try:  # Get candle information
             candle_info = get_from_api(api=api,
                                        exchange=exchange_id,
                                        trading_pair=trading_pair,
@@ -322,7 +342,6 @@ def live_update(period = 300): # Period default is 5 minutes
         # that there is such a gap in candle data that the time frame cannot
         # advance to new candles, so continue with this task at an updated timestep
         if candle_info is None or candle_info['last_timestamp'] == start:
-            print('hello')
             force_start = start+limit*period  # set start equal to end
             num_retries += 1
             continue
@@ -339,7 +358,8 @@ def live_update(period = 300): # Period default is 5 minutes
         ts = candle_info['last_timestamp']
         print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
 
-        force_start = 0 # reset these variables
+        # reset these variables
+        force_start = 0
         num_retries = 0
         # Insert into sql
         try:

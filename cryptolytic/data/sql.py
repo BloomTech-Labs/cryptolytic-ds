@@ -216,6 +216,16 @@ def get_api(api):
     safe_qall(q, {'api': api})
 
 
+def get_bad_timestamps(info):
+    q = """
+    select * from (select "timestamp", lead("timestamp", 1) over (order by "timestamp") ntimestamp
+    from candlesticks
+    where exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and "period"=%(period)s q
+    where "timestamp" <> ntimestamp - 60;"""
+    assert {''}.issubset(info.keys())
+    return safe_qall(q, info)
+
+
 def remove_api(api):
     """
     Drop API from candle table
@@ -226,3 +236,30 @@ def remove_api(api):
     if conn is not None:
         print(f"Removed {api}")
         conn.commit()
+
+
+def remove_duplicates():
+    """ 
+        Remove any duplicate candlestick information from the database. 
+    """
+    q = """delete from candlesticks
+        where "timestamp" in 
+        (select "timestamp"
+        from 
+            (select "timestamp", 
+            row_number() over (partition by exchange, trading_pair, "timestamp" order by "timestamp") as row_num
+            from candlesticks) q
+        where q.row_num > 1"""
+
+    conn = safe_q(q, return_conn=True)
+    conn.commit()
+
+def get_missing_timesteps(info):
+    q = """select "timestamp" from (select *, lead("timestamp", 1) over (order by "timestamp") ntimestamp
+           from candlesticks
+           where exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and "period"=%(period)s q
+           where "timestamp" <> ntimestamp - 60;"""
+    assert {'period', 'trading_pair', 'exchange_id'}.issubset(info.keys())
+
+    timestamps = safe_qall(q, info)
+    return timestamps
