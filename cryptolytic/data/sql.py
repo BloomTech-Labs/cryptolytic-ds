@@ -81,6 +81,7 @@ def create_candle_table():
                  high numeric not null,
                  low numeric not null,
                  volume numeric not null,
+                 primary key (exchange, trading_pair, timestamp)
                  );"""
 
     # imputed boolean not null default FALSE
@@ -130,11 +131,13 @@ def add_candle_data_to_table(df, cur):
         args_str = ','.join(x)
     except Exception as e:
         print('ERROR', e)
-    try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+    # except between two select statements causes it to not insert duplicates
+    q = """INSERT INTO candlesticks VALUES %(values)s except select * from candlesticks;"""
+    conn, curr = safe_q(q, 
+            {'values' : args_str},
+            return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def candlestick_to_sql(data):
@@ -275,13 +278,6 @@ def get_missing_timesteps():
     """
     missing = safe_qall(q)
 
-    #q = """select api, exchange, period, trading_pair, "timestamp", ntimestamp 
-    #	    from (select *, lead("timestamp", 1) over (partition by(exchange, trading_pair) order by "timestamp") ntimestamp
-    #        from candlesticks
-    #        where "period"=60) q
-    #        where "timestamp" <> ntimestamp - 60
-    #        ;"""
-    
     return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
 
 
