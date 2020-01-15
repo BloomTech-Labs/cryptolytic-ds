@@ -81,6 +81,7 @@ def create_candle_table():
                  high numeric not null,
                  low numeric not null,
                  volume numeric not null,
+                 primary key (exchange, trading_pair, timestamp, period)
                  );"""
 
     # imputed boolean not null default FALSE
@@ -110,7 +111,7 @@ def get_table_columns(table_name):
 
 
 def add_candle_data_to_table(df, cur):
-    """
+    """pply(
         Builds a string from our data-set using the mogrify method which is
         then called once using the execute method
     """
@@ -118,7 +119,10 @@ def add_candle_data_to_table(df, cur):
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-    df['timestamp'] = df['timestamp'].apply(str)
+    df['timestamp'] = df['timestamp'].apply(int)
+    num_cols = ['open', 'high', 'low', 'close', 'volume']
+    df[num_cols] = df[num_cols].apply(pd.to_numeric)
+    print(df.head())
     args_str = None
 
     try:
@@ -131,7 +135,7 @@ def add_candle_data_to_table(df, cur):
     except Exception as e:
         print('ERROR', e)
     try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str + " except select * from candlesticks;")
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -253,17 +257,22 @@ def remove_duplicates():
     """ 
         Remove any duplicate candlestick information from the database. 
     """
-    q = """delete from candlesticks
-        where "timestamp" in 
-        (select "timestamp"
-        from 
-            (select "timestamp", 
-            row_number() over (partition by exchange, trading_pair, "timestamp" order by "timestamp") as row_num
-            from candlesticks) q
-        where q.row_num > 1);"""
+    q = """
+        with q as (select *, "timestamp" - lag(timestamp, 1)
+                over (partition by(exchange, trading_pair, period) 
+                order by "timestamp"
+        ) as diff from candlesticks)
+        delete from candlesticks
+        where ctid in (
+                select ctid 
+                from q
+                where diff=0
+                order by timestamp);
+            """
 
     conn, curr = safe_q(q, return_conn=True)
-    conn.commit()
+    if conn is not None:
+        conn.commit()
 
 
 def get_missing_timesteps():
@@ -275,13 +284,6 @@ def get_missing_timesteps():
     """
     missing = safe_qall(q)
 
-    #q = """select api, exchange, period, trading_pair, "timestamp", ntimestamp 
-    #	    from (select *, lead("timestamp", 1) over (partition by(exchange, trading_pair) order by "timestamp") ntimestamp
-    #        from candlesticks
-    #        where "period"=60) q
-    #        where "timestamp" <> ntimestamp - 60
-    #        ;"""
-    
     return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
 
 
@@ -289,9 +291,19 @@ def get_missing_timesteps():
 # Used for filling in missing candlestick values
 # expects timestamp, trading_pair, and period
 def get_avg_candle(query):
-    q =  """select avg("open"), avg(high), avg(low), avg("close"), avg(volume) from candlesticks
+    # Query to get avg price values
+    q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    assert {'timestamp', 'trading_pair', 'period'}.issubset(query.keys())
-    result = safe_q2(q, query)
-    ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
-    return {key: result[i] for i, key in zip(range(len(result)), ohclv)}
+    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
+    intermediate = safe_q2(q, query)
+
+    # Query to get previous volume for the trading pair
+    q2 = """select prev_volume from (select *, lag(volume, 1) over
+            (partition by (exchange, trading_pair, period)
+            order by "timestamp") as prev_volume from candlesticks) q
+            where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
+;    """
+    ohclv = ["open", "high", "close", "low", "timestamp"]
+    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
+    result['volume'] = safe_q2(q2, query)
+    return result
