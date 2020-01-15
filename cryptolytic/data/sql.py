@@ -44,6 +44,11 @@ def safe_q1(q, args={}, return_conn=False):
     if result is not None:
         return result[0]
 
+# like q1 but more appropriate in some cases
+def safe_q2(q, args={}, return_conn=False):
+    result = safe_q(q, args, return_conn).fetchone()
+    return result
+
 
 def safe_qall(q, args={}, return_conn=False):
     return safe_q(q, args, return_conn).fetchall()
@@ -75,8 +80,10 @@ def create_candle_table():
                  close numeric not null,
                  high numeric not null,
                  low numeric not null,
-                 volume numeric not null);"""
+                 volume numeric not null,
+                 );"""
 
+    # imputed boolean not null default FALSE
     conn, cur = safe_q(q, return_conn=True)
     if conn is not None:
         conn.commit()
@@ -112,6 +119,7 @@ def add_candle_data_to_table(df, cur):
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
     df['timestamp'] = df['timestamp'].apply(str)
+    args_str = None
 
     try:
         x = [
@@ -130,6 +138,9 @@ def add_candle_data_to_table(df, cur):
 
 
 def candlestick_to_sql(data):
+    """
+        Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
+    """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
@@ -249,17 +260,34 @@ def remove_duplicates():
             (select "timestamp", 
             row_number() over (partition by exchange, trading_pair, "timestamp" order by "timestamp") as row_num
             from candlesticks) q
-        where q.row_num > 1"""
+        where q.row_num > 1);"""
 
-    conn = safe_q(q, return_conn=True)
+    conn, curr = safe_q(q, return_conn=True)
     conn.commit()
 
-def get_missing_timesteps(info):
-    q = """select "timestamp" from (select *, lead("timestamp", 1) over (order by "timestamp") ntimestamp
-           from candlesticks
-           where exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and "period"=%(period)s q
-           where "timestamp" <> ntimestamp - 60;"""
-    assert {'period', 'trading_pair', 'exchange_id'}.issubset(info.keys())
 
-    timestamps = safe_qall(q, info)
-    return timestamps
+def get_missing_timesteps():
+        q = """select api, exchange, period, trading_pair, "timestamp", ntimestamp 
+	from (select *, lead("timestamp", 1) over (partition by(exchange, trading_pair) order by "timestamp") ntimestamp
+    from candlesticks
+    where "period"=60) q
+    where "timestamp" <> ntimestamp - 60
+    limit 10
+    ;"""
+    
+    missing = safe_qall(q)
+    print(missing)
+    
+    return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
+
+
+
+# Used for filling in missing candlestick values
+# expects timestamp, trading_pair, and period
+def get_avg_candle(query):
+    q =  """select avg("open"), avg(high), avg(low), avg("close"), avg(volume) from candlesticks
+            where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
+    assert {'timestamp', 'trading_pair', 'period'}.issubset(query.keys())
+    result = safe_q2(q, query)
+    ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
+    return {key: result[i] for i, key in zip(range(len(result)), ohclv)}
