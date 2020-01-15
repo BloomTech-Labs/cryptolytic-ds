@@ -100,10 +100,9 @@ def convert_candlestick(candlestick, api, timestamp):
             candlestick['timestamp'] = timestamp
 
         # Check if candle schema is valid
-        candle_schema = ['timestamp', 'open', 'close', 'volume', 'high', 'low']
 
         # no less than year 2000 or greater than 2030. timesamp must be an int
-        if (not all(x in candlestick.keys() for x in candle_schema)) or \
+        if (not all(x in candlestick.keys() for x in ohclv)) or \
            not isinstance(candlestick['timestamp'], int) or candlestick['timestamp'] >= 1894131876 or candlestick['timestamp'] <= 947362914: 
             raise Exception()
     except Exception:
@@ -269,7 +268,21 @@ def sample_every_pair(n=3000, query={}):
     df = pd.DataFrame()
     # can't specify these with this function
     assert not {'api', 'exchange_id', 'trading_pair'}.issubset(query)
-    for api, exchange_id, trading_pair in yield_unique_pair():
+
+    def dict_matches(cond, b):
+        return set(cond.items()).issubset(set(b.items()))
+
+    def select_keys(d, keys):
+        return {k: d[k] for k in keys if k in d}
+
+    def filter_pairs():
+        keys = ['api', 'exchange_id', 'trading_pair']
+        thing = select_keys(query, keys)
+        return filter(lambda pair: 
+                      dict_matches(thing, dict(zip(keys, pair))), 
+                      yield_unique_pair())
+
+    for api, exchange_id, trading_pair in filter_pairs():
         d = {'api': api,
              'exchange_id': exchange_id,
              'trading_pair': trading_pair}
@@ -277,7 +290,51 @@ def sample_every_pair(n=3000, query={}):
         df = df.append(sql.get_candles(d, n, verbose=True))
     return df
 
-           
+
+# returns true if updated, or None if the task should be dropped
+def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retries=0):
+    if num_retries > 100:
+        return
+
+    limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
+    candle_info = None
+
+    try:  # Get candle information
+        candle_info = get_from_api(api=api,
+                                   exchange=exchange_id,
+                                   trading_pair=trading_pair,
+                                   start=timestamp,
+                                   period=period,
+                                   limit=limit)
+    except Exception as e:
+        print(e)
+        logging.error(e)
+
+    # If the last timestep is equal to the ending candle
+    # that there is such a gap in candle data that the time frame cannot
+    # advance to new candles, so continue with this task at an updated timestep
+    if candle_info is None or candle_info['last_timestamp'] == timestamp:
+        print("YOOO", api, exchange_id, trading_pair, timestamp)
+        print("aou", candle_info)
+        print(type(limit))
+        print(type(timestamp))
+        print(type(num_retries))
+        print(type(period))
+        return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
+    
+    # Print the timestamp
+    ts = candle_info['last_timestamp']
+    print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
+
+    # Insert into sql
+    try:
+        print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
+        sql.candlestick_to_sql(candle_info)
+        return True # ran without error
+    except Exception as e:
+        logging.error(e)
+
+
 def live_update(period = 300): # Period default is 5 minutes
     """
         Updates the database based on the info in data/api_info.json with new candlestick info,
@@ -292,57 +349,63 @@ def live_update(period = 300): # Period default is 5 minutes
     for api, exchange_id, trading_pair in yield_unique_pair():
         d.append([api, exchange_id, trading_pair])
     
-    force_start = 0  # look forward for extra values in case there are gaps in the data
-    num_retries = 0  # drop a task after so many retries
-
     for i in range(10_000):
         if len(d)==0:
             break
         api, exchange_id, trading_pair = d[-1]  # get the current task
-        
         print(api, exchange_id, trading_pair)
+
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
-        if force_start != 0:
-            start = force_start
-        limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
-        candle_info = None
-
-        try: 
-            candle_info = get_from_api(api=api,
-                                       exchange=exchange_id,
-                                       trading_pair=trading_pair,
-                                       start=start,
-                                       period=period,
-                                       limit=limit)
-        except Exception as e:
-            print(e)
-            logging.error(e)
-
-        # If the last timestep is equal to the ending candle
-        # that there is such a gap in candle data that the time frame cannot
-        # advance to new candles, so continue with this task at an updated timestep
-        if candle_info is None or candle_info['last_timestamp'] == start:
-            print('hello')
-            force_start = start+limit*period  # set start equal to end
-            num_retries += 1
+            
+        # already at the latest date, remove 
+        if start >= round(now)-period:
+            d.pop() 
             continue
 
-        # last candle is up to date with current time, done updating for this trading_pair on this exchange
-        # or, retries have been exhausted
-        if num_retries >= 100 or candle_info['last_timestamp'] >= round(now)-period:
-            d.pop()  # pop task when done, or when candle_info was nil
+        if api == 'coinbase': 
+            d.pop()
+            continue
+
+        # returns true if updated, or None if the task should be dropped
+        result = update_pair(api, exchange_id, trading_pair, start, period)
+        if result is None:
+            d.pop()
             continue
         else:
-            d.rotate(1)  # rotate the task
-        
-        # Print the timestamp
-        ts = candle_info['last_timestamp']
-        print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
+            d.rotate()
 
-        force_start = 0 # reset these variables
-        num_retries = 0
-        # Insert into sql
-        try:
-            sql.candlestick_to_sql(candle_info)
-        except Exception as e:
-            logging.error(e)
+
+# hitbtc
+def fill_missing_candles():
+    missing = sql.get_missing_timesteps()
+    for i, s in missing.iterrows():
+        api, exchange, period, trading_pair, timestamp, ntimestamp = s
+        print(int(timestamp))
+        # first try to update with an api call
+        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
+    sql.remove_duplicates()  # remove any duplicate candlesticks
+
+    # For those that are still missing, impute their value
+    missing = sql.get_missing_timesteps()
+    for i, s in missing.iterrows():
+        api, exchange, period, trading_pair, timestamp, ntimestamp = s
+        candles = []
+        last_timestep = 0
+        for ts in range(timestamp, ntimestamp, int(period)):
+            print("Imputing values for ", exchange, trading_pair, ts)
+            candle = sql.get_avg_candle({'timestamp': ts,
+                                         'trading_pair': trading_pair,
+                                         'period': period})
+            last_timestep = candle['timestamp'] = ts
+            candles.append(candle)
+
+        candle_info = dict(
+            api=api,
+            exchange=exchange,
+            candles=candles,
+            last_timestamp=last_timestep,
+            trading_pair=trading_pair,
+            candles_collected=len(candles),
+            period=period)  # period in seconds
+
+        sql.candlestick_to_sql(candle_info)
