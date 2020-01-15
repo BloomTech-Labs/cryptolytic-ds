@@ -394,7 +394,8 @@ def fill_missing_candles():
             print("Imputing values for ", exchange, trading_pair, ts)
             candle = sql.get_avg_candle({'timestamp': ts,
                                          'trading_pair': trading_pair,
-                                         'period': period})
+                                         'period': period,
+                                         'exchange': exchange})
             last_timestep = candle['timestamp'] = ts
             candles.append(candle)
 

@@ -81,7 +81,7 @@ def create_candle_table():
                  high numeric not null,
                  low numeric not null,
                  volume numeric not null,
-                 primary key (exchange, trading_pair, timestamp)
+                 primary key (exchange, trading_pair, timestamp, period)
                  );"""
 
     # imputed boolean not null default FALSE
@@ -291,9 +291,19 @@ def get_missing_timesteps():
 # Used for filling in missing candlestick values
 # expects timestamp, trading_pair, and period
 def get_avg_candle(query):
-    q =  """select avg("open"), avg(high), avg(low), avg("close"), avg(volume) from candlesticks
+    # Query to get avg price values
+    q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    assert {'timestamp', 'trading_pair', 'period'}.issubset(query.keys())
-    result = safe_q2(q, query)
-    ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
-    return {key: result[i] for i, key in zip(range(len(result)), ohclv)}
+    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
+    intermediate = safe_q2(q, query)
+
+    # Query to get previous volume for the trading pair
+    q2 = """select prev_volume from (select *, lag(volume, 1) over
+            (partition by (exchange, trading_pair, period)
+            order by "timestamp") as prev_volume from candlesticks) q
+            where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
+;    """
+    ohclv = ["open", "high", "close", "low", "timestamp"]
+    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
+    result['volume'] = safe_q2(q2, query)
+    return result
