@@ -267,16 +267,20 @@ def remove_duplicates():
 
 
 def get_missing_timesteps():
-        q = """select api, exchange, period, trading_pair, "timestamp", ntimestamp 
-	from (select *, lead("timestamp", 1) over (partition by(exchange, trading_pair) order by "timestamp") ntimestamp
-    from candlesticks
-    where "period"=60) q
-    where "timestamp" <> ntimestamp - 60
-    limit 10
-    ;"""
-    
+    q = """
+        select api, exchange, period, trading_pair, "timestamp",  "timestamp" + diff as ntimestamp
+        from (select *, "timestamp" - lag(timestamp, 1)
+        over (partition by(exchange, trading_pair, period) order by "timestamp") as diff from candlesticks) q
+        where diff <> "period";
+    """
     missing = safe_qall(q)
-    print(missing)
+
+    #q = """select api, exchange, period, trading_pair, "timestamp", ntimestamp 
+    #	    from (select *, lead("timestamp", 1) over (partition by(exchange, trading_pair) order by "timestamp") ntimestamp
+    #        from candlesticks
+    #        where "period"=60) q
+    #        where "timestamp" <> ntimestamp - 60
+    #        ;"""
     
     return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
 

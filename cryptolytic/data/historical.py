@@ -273,7 +273,7 @@ def sample_every_pair(n=3000, query={}):
         return set(cond.items()).issubset(set(b.items()))
 
     def select_keys(d, keys):
-        return {k: d[k] for k in keys}
+        return {k: d[k] for k in keys if k in d}
 
     def filter_pairs():
         keys = ['api', 'exchange_id', 'trading_pair']
@@ -315,6 +315,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
         print("YOOO", api, exchange_id, trading_pair, timestamp)
+        print("aou", candle_info)
         print(type(limit))
         print(type(timestamp))
         print(type(num_retries))
@@ -332,7 +333,8 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
         return True # ran without error
     except Exception as e:
         logging.error(e)
-           
+
+
 def live_update(period = 300): # Period default is 5 minutes
     """
         Updates the database based on the info in data/api_info.json with new candlestick info,
@@ -373,13 +375,14 @@ def live_update(period = 300): # Period default is 5 minutes
             d.rotate()
 
 
+# hitbtc
 def fill_missing_candles():
     missing = sql.get_missing_timesteps()
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
+        print(int(timestamp))
         # first try to update with an api call
-        print(period)
-        update_pair(api, exchange, trading_pair, timestamp, period)
+        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
     sql.remove_duplicates()  # remove any duplicate candlesticks
 
     # For those that are still missing, impute their value
