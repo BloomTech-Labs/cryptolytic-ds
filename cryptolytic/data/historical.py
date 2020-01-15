@@ -314,8 +314,6 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
-        print("YOOO", api, exchange_id, trading_pair, timestamp)
-        print("aou", candle_info)
         print(type(limit))
         print(type(timestamp))
         print(type(num_retries))
@@ -378,6 +376,7 @@ def live_update(period = 300): # Period default is 5 minutes
 # hitbtc
 def fill_missing_candles():
     missing = sql.get_missing_timesteps()
+    print(missing)
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
         print(int(timestamp))
