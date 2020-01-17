@@ -5,6 +5,10 @@ def timeout_handler(signum, frame):
     raise TimeoutError()
 
 def timeout(fn, time, timeout_handler=None, success_handler=None):
+    """fn: function to call
+       time: time to wait before cancelling the thread it was put on
+       timeout_handler: function to call if thread was cancelled
+       success_handler: function to call if thread was not cancelled"""
     try:
         p = multiprocessing.Process(target=fn)
         p.start()  # start process on fn
@@ -22,3 +26,8 @@ def timeout(fn, time, timeout_handler=None, success_handler=None):
     except Exception as e:
         print(e)
         return 
+
+
+def bdir(x):
+    "better dir command, filters out things beginning with _"
+    return list(filter(lambda x: not x.startswith('_'), dir(x)))

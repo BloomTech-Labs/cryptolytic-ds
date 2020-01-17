@@ -252,7 +252,7 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
 
 
 def yield_unique_pair():
-    """Yield unique trading pair"""
+    """Yield unique trading pair (not including period information)"""
     api_iter = api_info.items()
     for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
@@ -268,6 +268,7 @@ def sample_every_pair(n=3000, query={}):
     df = pd.DataFrame()
     # can't specify these with this function
     assert not {'api', 'exchange_id', 'trading_pair'}.issubset(query)
+    assert {'period'}.issubset(query)
 
     def dict_matches(cond, b):
         return set(cond.items()).issubset(set(b.items()))
@@ -286,8 +287,8 @@ def sample_every_pair(n=3000, query={}):
         d = {'api': api,
              'exchange_id': exchange_id,
              'trading_pair': trading_pair}
-        d.update(query) # mutates
-        df = df.append(sql.get_candles(d, n, verbose=True))
+        d.update(query)  # mutates
+        df = df.append(sql.get_some_candles(d, n, verbose=True))
     return df
 
 
@@ -296,7 +297,8 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     if num_retries > 100:
         return
 
-    limit = api_info.get(api).get('limit') or 100  # limit to 100 candles if limit is not specified
+    # limit to 100 candles if limit is not specified
+    limit = api_info.get(api).get('limit') or 100 
     candle_info = None
 
     try:  # Get candle information
@@ -360,10 +362,6 @@ def live_update(period = 300): # Period default is 5 minutes
             d.pop() 
             continue
 
-        if api == 'coinbase': 
-            d.pop()
-            continue
-
         # returns true if updated, or None if the task should be dropped
         result = update_pair(api, exchange_id, trading_pair, start, period)
         if result is None:
@@ -382,7 +380,6 @@ def fill_missing_candles():
         print(int(timestamp))
         # first try to update with an api call
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
-    sql.remove_duplicates()  # remove any duplicate candlesticks
 
     # For those that are still missing, impute their value
     missing = sql.get_missing_timesteps()

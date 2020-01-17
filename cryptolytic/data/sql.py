@@ -176,9 +176,13 @@ def get_latest_date(exchange_id, trading_pair, period):
     return latest_date
 
 
-def get_some_candles(info, n=100, verbose=False):
+def get_some_candles(info, n=10000, verbose=False):
     """
         Return n candles
+        info: can contain start (unix-timestamp or str), end, exchange_id, 
+            period (in seconds), trading_pair
+            Example: info={'start':1546300800, 'end':1546309800, 'exchange_id':'bitfinex',
+                           'trading_pair':'eth_btc', 'period':300}
     """
     n = min(n, 50000)  # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
@@ -216,14 +220,15 @@ def get_some_candles(info, n=100, verbose=False):
     columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
     # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
     df = pd.DataFrame(results, columns=columns)  
-    return df
-
-
-def get_candles(info, n=100, verbose=False):
-    df = get_some_candles(info, n, verbose)
+    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+    df['period'] = info['period']
     numeric = ['period', 'open', 'close', 'high', 'low', 'volume']
     df[numeric] = df[numeric].apply(pd.to_numeric)
     return df
+
+
+def get_candles(info, n=100):
+    return get_some_candles(info, n, True)
 
 
 def get_api(api):
@@ -278,8 +283,9 @@ def remove_duplicates():
 def get_missing_timesteps():
     q = """
         select api, exchange, period, trading_pair, "timestamp",  "timestamp" + diff as ntimestamp
-        from (select *, "timestamp" - lag(timestamp, 1)
-        over (partition by(exchange, trading_pair, period) order by "timestamp") as diff from candlesticks) q
+        from (select *, lead(timestamp, 1)
+        over (partition by(exchange, trading_pair, period) order by "timestamp") - "timestamp" as diff
+        from candlesticks) q
         where diff <> "period";
     """
     missing = safe_qall(q)
