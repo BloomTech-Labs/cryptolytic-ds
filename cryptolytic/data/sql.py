@@ -227,10 +227,6 @@ def get_some_candles(info, n=10000, verbose=False):
     return df
 
 
-def get_candles(info, n=100):
-    return get_some_candles(info, n, True)
-
-
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
     safe_qall(q, {'api': api})
@@ -244,18 +240,6 @@ def get_bad_timestamps(info):
     where "timestamp" <> ntimestamp - 60;"""
     assert {''}.issubset(info.keys())
     return safe_qall(q, info)
-
-
-def remove_api(api):
-    """
-    Drop API from candle table
-    """
-    q = """DELETE FROM candlesticks
-           WHERE api = %(api)s"""
-    conn, cur = safe_q(q, {'api' : api}, return_conn=True)
-    if conn is not None:
-        print(f"Removed {api}")
-        conn.commit()
 
 
 def remove_duplicates():
