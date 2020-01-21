@@ -41,7 +41,6 @@ def create_framework_lstm(x_train, lstm_output_dimensionality=1):
     return framework_lstm
 
 
-
 def model_compile(model_framework,
                   loss='binary_crossentropy',
                   optimizer='adam',
