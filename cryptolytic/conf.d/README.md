@@ -5,7 +5,7 @@ The port is socketed 8000 => 80 \
 **Unix command: gunicorn3 application:application**
 
 ## Note
-Set supervisor environment variables to the same as the environemnt variables
+Set supervisor environment variables to the same as the environment variables
 held in the .env file for flask app.
 
 ### Deployed at:
