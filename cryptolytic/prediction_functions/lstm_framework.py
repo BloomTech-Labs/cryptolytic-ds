@@ -47,19 +47,18 @@ framework_lstm.compile(loss='binary_crossentropy',
                        optimizer='adam',
                        metrics=['accuracy'])
 
-# slice the data to fit the data and fitting
+# slice the train and validation data to later fit the model
 train_univariate = tf.data.Dataset.from_tensor_slices(
     ('''x_train data''', '''y_train data'''))
-train_univariate = train_univariate.cache().shuffle(buffer_size).batch(batch_size).repeat()
-
+train_univariate = train_univariate.cache().shuffle(buffer_size)\
+    .batch(batch_size).repeat()
 val_univariate = tf.data.Dataset.from_tensor_slices(
     ('''x_val data''', '''y_val data'''))
 val_univariate = val_univariate.batch(batch_size).repeat()
 
 # fit the model
-# train data and validation data should be (x,y)
-framework_lstm.fit(''' train data''',
+framework_lstm.fit(train_univariate,
                    epochs=epochs,
                    steps_per_epoch=evaluation_interval,
-                   validation_data='''validation data''',
+                   validation_data=val_univariate,
                    validation_steps=validation_steps)
