@@ -50,11 +50,10 @@ framework_lstm.compile(loss='binary_crossentropy',
 # slice the train and validation data to later fit the model
 train_univariate = tf.data.Dataset.from_tensor_slices(
     ('''x_train data''', '''y_train data'''))
-train_univariate = train_univariate.cache().shuffle(buffer_size)\
-    .batch(batch_size).repeat()
+train_univariate = train_univariate.cache().batch(batch_size).repeat()
 val_univariate = tf.data.Dataset.from_tensor_slices(
     ('''x_val data''', '''y_val data'''))
-val_univariate = val_univariate.batch(batch_size).repeat()
+val_univariate = val_univariate.repeat()
 
 # fit the model
 framework_lstm.fit(train_univariate,
