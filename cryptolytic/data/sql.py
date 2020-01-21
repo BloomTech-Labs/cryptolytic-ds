@@ -176,6 +176,17 @@ def get_latest_date(exchange_id, trading_pair, period):
     return latest_date
 
 
+def fix_df(df):
+    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+    numeric = ['period', 'open', 'close', 'high', 'low', 'volume', 'arb_diff', 'arb_signal']
+    for col in numeric:
+        if col not in df.columns:
+            continue
+        df[col] = pd.to_numeric(df[col])
+    df = df.set_index('datetime')
+    return df
+
+
 def get_some_candles(info, n=10000, verbose=False):
     """
         Return n candles
@@ -189,7 +200,7 @@ def get_some_candles(info, n=10000, verbose=False):
     where = ''
 
     assert 'period' in info.keys()  # Require period information
-    
+
     # make sure dates are of right format
     if 'start' in info:
         info['start'] = date.convert_datetime(info['start'])
@@ -220,12 +231,8 @@ def get_some_candles(info, n=10000, verbose=False):
     columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
     # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
     df = pd.DataFrame(results, columns=columns)  
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
     df['period'] = info['period']
-    numeric = ['period', 'open', 'close', 'high', 'low', 'volume']
-    df[numeric] = df[numeric].apply(pd.to_numeric)
-    return df
-
+    return fix_df(df)
 
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
@@ -281,10 +288,13 @@ def get_missing_timesteps():
 # Used for filling in missing candlestick values
 # expects timestamp, trading_pair, and period
 def get_avg_candle(query):
-    # Query to get avg price values
+    """Query to get avg price values for a candlestick at a certain timestamp.
+       TODO batch query for improved performance."""
+
+    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
+
     q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
     intermediate = safe_q2(q, query)
 
     # Query to get previous volume for the trading pair
@@ -297,3 +307,37 @@ def get_avg_candle(query):
     result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
     result['volume'] = safe_q2(q2, query)
     return result
+
+
+def get_arb_signal(info, n=1000):
+    """
+    Example: info := {'start':1556668800, 'period':300, 'trading_pair':'eth_btc', 'exchange_id':'binance'}
+    """
+
+    assert {'exchange_id', 'trading_pair', 'period', 'start'}.issubset(info.keys())
+    info['n'] = n
+
+    q = """with sub as (
+           select * from candlesticks
+           where trading_pair=%(trading_pair)s and period=%(period)s and timestamp>=%(start)s
+           ),
+
+           thing as (
+           select "timestamp", avg(close) from  sub
+           group by (timestamp)
+           )
+
+          select exchange,trading_pair, thing.timestamp, "period", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
+                 (sub inner join thing on sub.timestamp = thing.timestamp)
+          where exchange=%(exchange_id)s
+          order by thing.timestamp
+          limit %(n)s
+          ;
+    """
+
+    results = safe_qall(q, info)
+    if results is not None:
+        # arb_signal is more interpretable than arb_diff but the signal is the same
+        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "arb_diff", "arb_signal"])
+        return fix_df(df)
+

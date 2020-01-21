@@ -22,6 +22,7 @@ with open('data/cryptocurrencies.json', 'r', encoding='utf-8') as f:
     crypto_name_table = json.load(f)
 assert crypto_name_table.keys()
 
+
 """
 If you are having timeout issues connecting to the AWS RDS instance, make sure
 to configure your AWS VPC security groups to allow outside access
