@@ -382,7 +382,10 @@ def fill_missing_candles():
         print(int(timestamp))
         # first try to update with an api call
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
-    sql.remove_duplicates()  # remove any duplicate candlesticks
+
+    # sql.remove_duplicates()  # remove any duplicate candlesticks
+    # Currently commented due to concerns of overdeleting data, will either
+    # remove or uncomment once testing on this concern has been done.
 
     # For those that are still missing, impute their value
     missing = sql.get_missing_timesteps()
