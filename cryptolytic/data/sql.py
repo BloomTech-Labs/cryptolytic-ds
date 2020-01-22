@@ -1,11 +1,14 @@
 import psycopg2 as ps
 import os
+import cryptolytic.data as d
 from cryptolytic.data import historical
+from cryptolytic.util import *
 import cryptolytic.util.date as date
 import time
 import pandas as pd
 import json
 from itertools import repeat
+
 
 
 def get_credentials():
@@ -123,6 +126,8 @@ def add_candle_data_to_table(df, cur):
 #    num_cols = ['open', 'high', 'low', 'close', 'volume']
 #    df[num_cols] = df[num_cols].apply(pd.to_numeric)
     df = fix_df(df)
+    df = d.resample_ohlcv(df)
+    
     print(df.head())
     args_str = None
 
@@ -185,6 +190,7 @@ def fix_df(df):
             continue
         df[col] = pd.to_numeric(df[col])
     df = df.set_index('datetime')
+
     return df
 
 
@@ -294,6 +300,8 @@ def get_avg_candle(query):
 
     assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
 
+    print( query )
+
     q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
     intermediate = safe_qall(q, query)
@@ -309,6 +317,45 @@ def get_avg_candle(query):
     result['volume'] = safe_q1(q2, query)
 
     return result
+
+
+def batch_avg_candles(info):
+    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
+
+    if len(info['timestamps']) == 1:
+        info['timestamps'] = '('+str(info['timestamps'][0])+')'
+    else:
+        info['timestamps'] = tuple(info['timestamps'])
+
+    q = """
+        select "timestamp", avg("open"), avg(high), avg(low), avg("close") from candlesticks
+        where timestamp in %(timestamps)s and trading_pair=%(trading_pair)s and period=%(period)s
+        group by timestamp;
+    """
+
+    result = safe_qall(q, info)
+    return pd.DataFrame(result, columns=['timestamp', 'open', 'high', 'low', 'close'])
+
+
+def batch_last_volume_candles(info):
+    q2 = """
+        with prev_volumes as (
+        select "timestamp",
+            lag("volume", 1) over (
+                order by "timestamp"
+            ) prev_volume
+        from candlesticks
+        where "timestamp" in %(timestamps)s and trading_pair=%(trading_pair)s
+                            and period=%(period)s and exchange=%(exchange)s
+        )
+        select "timestamp", prev_volume from prev_volumes;
+    """
+
+    volumes = safe_qall(q2, info)
+
+    return pd.DataFrame(volumes, columns=['timestamp', 'volume'])
+    
+
 
 
 def get_arb_info(info, n=1000):

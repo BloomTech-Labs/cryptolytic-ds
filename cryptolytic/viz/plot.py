@@ -29,20 +29,20 @@ def plot_all_candlesticks(df):
 def model_performance(df):
     pass
 
-def model_prediction(, future, title):
-    """
-    Using plot data 
-    """
-    labels = ['History', 'True Future', 'Model Prediction']
-    marker = ['.-', 'rx', 'go']
-#    time_steps = create_time_steps(plot_data.shape[0])
-
-    plt.title(title)
-    for i, x in enumerate(plot_data):
-        plt.plot(future, plot_data[i], marker[i], markersize=10,
-                    label=labels[i])
-
-    plt.legend()
-    plt.xlim(plot_data.index, (future+5)*2])
-    plt.xlabel('Time-Step')
-    return plt
+# def model_prediction(, future, title):
+#     """
+#     Using plot data 
+#     """
+#     labels = ['History', 'True Future', 'Model Prediction']
+#     marker = ['.-', 'rx', 'go']
+# #    time_steps = create_time_steps(plot_data.shape[0])
+# 
+#     plt.title(title)
+#     for i, x in enumerate(plot_data):
+#         plt.plot(future, plot_data[i], marker[i], markersize=10,
+#                     label=labels[i])
+# 
+#     plt.legend()
+#     plt.xlim(plot_data.index, (future+5)*2])
+#     plt.xlabel('Time-Step')
+#     return plt

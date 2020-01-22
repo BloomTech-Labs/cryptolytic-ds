@@ -7,6 +7,11 @@ def get_by_time(df, start, end):
     return df[q]
 
 
+def convert_datetime_to_timestamp(dt):
+    """Convert pandas datetime to unix timestamp"""
+    return int(dt.timestamp())
+
+
 def denoise(signal, repeat):
     "repeat: how smooth to make the graph"
     copy_signal = np.copy(signal)
@@ -15,6 +20,13 @@ def denoise(signal, repeat):
             # set previous timestep to be between the timestep i and i - 2
             copy_signal[i - 1] = (copy_signal[i - 2] + copy_signal[i]) / 2
     return copy_signal
+
+
+def merge_candle_dfs(df1, df2):
+    """Merge candle dataframes"""
+    merge_cols = ['trading_pair', 'exchange', 'period', 'datetime']
+    df_merged = df1.merge(df2, how='inner', on=merge_cols) 
+    return df_merged
 
 
 def resample_ohlcv(df, period=None):
@@ -32,9 +44,19 @@ def resample_ohlcv(df, period=None):
     if period==None:
         period = df['period'][0]
     period = pd.to_timedelta(period, unit='s')
-    df = df.resample(period, how=ohlcv_dict)
-    return df
+    df_new = df.resample(period, how=ohlcv_dict)
+    
+    missing = nan_df(df_new)
+
+    # df_new['trading_pair'] = df['trading_pair'][0]
+    # df_new['exchange'] = df['exchange'][0]
+    # df_new['exchange'] = df['exchange'][0]
+    # df_new['period'] = df['period'][0]
+
+    # return merge_candle_dfs(df, df_new)
+    return missing
 
 
-def nan_rows(df):
-    r = np.unique(np.where(df.isna())[0])
+def nan_df(df):
+    return df[df.isnull().any(axis=1)]
+

@@ -1,5 +1,5 @@
 import cryptolytic.data.sql as sql
-import cryptolytic.util.core as util
+import cryptolytic.util as util
 import cryptolytic.data.historical as h
 
 def test_check_tables():
