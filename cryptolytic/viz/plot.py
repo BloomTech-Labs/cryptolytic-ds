@@ -26,8 +26,10 @@ def plot_all_candlesticks(df):
         print(api, exchange_id, trading_pair)
         yield candlestick(group)
 
+def model_performance(df):
+    pass
 
-def model_prediction(plot_data, future, title):
+def model_prediction(, future, title):
     """
     Using plot data 
     """
@@ -41,6 +43,6 @@ def model_prediction(plot_data, future, title):
                     label=labels[i])
 
     plt.legend()
-    plt.xlim([time_steps[0], (future+5)*2])
+    plt.xlim(plot_data.index, (future+5)*2])
     plt.xlabel('Time-Step')
     return plt
