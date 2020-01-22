@@ -1,6 +1,9 @@
 import functools
 import signal
 import multiprocessing 
+import pprint
+
+pprint = pprint.PrettyPrinter().pprint
 
 def timeout_handler(signum, frame):
     raise TimeoutError()
