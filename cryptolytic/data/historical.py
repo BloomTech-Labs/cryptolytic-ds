@@ -3,10 +3,10 @@
 """
 import requests
 from cryptolytic.util import date
+from cryptolytic.util import *
 from cryptolytic.data import sql
 import time
 import os
-import requests
 import json
 from datetime import datetime
 import numpy as np
@@ -31,6 +31,8 @@ api_info = None
 with open('data/api_info.json', 'r') as f:
     api_info = json.load(f)
 assert len(api_info) > 1
+
+api_info = {k: v for k, v in api_info.items() if not v.get('disabled')}
 
 
 def crypto_full_name(crypto_short):
@@ -79,7 +81,6 @@ def trading_pair_info(api, x):
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick_old = candlestick
-    print(candlestick)
     candlestick = candlestick.copy()
     ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
     corder = api_info[api].get('candlestick_order')
@@ -270,8 +271,6 @@ def yield_unique_pair():
     api_iter = api_info.items()
     for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
-        if api_info[api].get('disabled') == True: 
-            continue
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
                 yield (api, exchange_id, trading_pair)
@@ -282,16 +281,11 @@ def sample_every_pair(n=3000, query={}):
         into a dataframe.
        query: paremeters for the db query"""
     df = pd.DataFrame()
+
     # can't specify these with this function
     assert not {'api', 'exchange_id', 'trading_pair'}.issubset(query)
     assert {'period'}.issubset(query)
-
-    def dict_matches(cond, b):
-        return set(cond.items()).issubset(set(b.items()))
-
-    def select_keys(d, keys):
-        return {k: d[k] for k in keys if k in d}
-
+  
     def filter_pairs():
         keys = ['api', 'exchange_id', 'trading_pair']
         thing = select_keys(query, keys)
@@ -333,10 +327,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
-        print(type(limit))
-        print(type(timestamp))
-        print(type(num_retries))
-        print(type(period))
+        print('Retry')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
     
     # Print the timestamp
@@ -346,6 +337,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     # Insert into sql
     try:
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
+
         sql.candlestick_to_sql(candle_info)
         return True # ran without error
     except Exception as e:
@@ -388,7 +380,6 @@ def live_update(period = 300): # Period default is 5 minutes
             d.rotate()
 
 
-# hitbtc
 def fill_missing_candles():
     #missing = sql.get_missing_timesteps()
     missing = pd.DataFrame({'api': ['hitbtc'], 

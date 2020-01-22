@@ -10,4 +10,4 @@ def test_check_tables():
                   'period' : 300},
                  n=100000,
                  verbose=True))
-        assert df.shape[0] > 100 # check to see that every trading pair has candles for it
+        assert df.shape[0] > 100  # check to see that every trading pair has candles for it

@@ -56,3 +56,10 @@ def filterl(f, coll):
 def first(x):
     if isinstance(x, list) or isinstance(x, tuple):
         return x[0]
+
+def dict_matches(cond, b):
+    return set(cond.items()).issubset(set(b.items()))
+
+def select_keys(d, keys):
+    return {k: d[k] for k in keys if k in d}
+

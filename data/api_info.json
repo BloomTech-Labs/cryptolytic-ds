@@ -2,10 +2,12 @@
   "cryptowatch": {
     "api_call": "https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
     "exchanges": {
-		"gemini" : [
-				"eth_btc",
-				"btc_usdt"
-		]
+		"gemini" : {
+				"trading_pairs" : [
+						"eth_btc",
+						"btc_usdt"
+				]
+		}
 	},
     "timestamp_format": "seconds",
     "pair_no_underscore": true,
@@ -163,10 +165,12 @@
 	"pair_reverse" : true,
 	"comment" : "Expects for example BTC_ETH instead of the other way around",
     "exchanges": {
-		"poloniex" : [
-          "eth_btc",
-          "btc_usdt"
-       ]
+		"poloniex" : {
+				"trading_pairs":[
+		          "eth_btc",
+				  "btc_usdt"
+				]
+		}
    }
   }
 }

@@ -18,7 +18,7 @@ def denoise(signal, repeat):
     "repeat: how smooth to make the graph"
     copy_signal = np.copy(signal)
     for j in range(repeat):
-        for i in range(3, len(signal)):
+        for i in range(2, len(signal)):
             # set previous timestep to be between the timestep i and i - 2
             copy_signal[i - 1] = (copy_signal[i - 2] + copy_signal[i]) / 2
     return copy_signal
@@ -33,8 +33,8 @@ def merge_candle_dfs(df1, df2):
 
 def resample_ohlcv(df, period=None):
     """this function resamples ohlcv csvs for a specified candle interval; while
-        this can be used to change the candle interval for the data, it can also be
-        used to fill in gaps in the ohlcv data without changing the candle interval"""
+       this can be used to change the candle interval for the data, it can also be
+       used to fill in gaps in the ohlcv data without changing the candle interval"""
     # dictionary specifying which columns to use for resampling
     ohlcv_dict = {'open': 'first',
                   'high': 'max',
@@ -47,16 +47,8 @@ def resample_ohlcv(df, period=None):
         period = df['period'][0]
     period = pd.to_timedelta(period, unit='s')
     df_new = df.resample(period, how=ohlcv_dict)
-    
-    missing = nan_df(df_new)
-
-    # df_new['trading_pair'] = df['trading_pair'][0]
-    # df_new['exchange'] = df['exchange'][0]
-    # df_new['exchange'] = df['exchange'][0]
-    # df_new['period'] = df['period'][0]
-
-    # return merge_candle_dfs(df, df_new)
-    return missing
+    # likely to contain nils
+    return df_new
 
 
 def nan_df(df):
@@ -68,6 +60,8 @@ def outer_merge(df1, df2):
 
 
 def fix_df(df):
+    """Changes columns to the right type if needed and makes sure the index is set as the
+    datetime of the timestamp"""
     df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
     numeric = ['period', 'open', 'close', 'high', 'low', 'volume', 'arb_diff', 'arb_signal']
     for col in numeric:

@@ -123,13 +123,10 @@ def add_candle_data_to_table(df, cur):
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-#    df['timestamp'] = df['timestamp'].apply(int)
-#    num_cols = ['open', 'high', 'low', 'close', 'volume']
-#    df[num_cols] = df[num_cols].apply(pd.to_numeric)
     df = d.fix_df(df)
-    df = d.resample_ohlcv(df)
     
     print(df.head())
+    print(len(df))
     args_str = None
 
     try:
@@ -152,13 +149,14 @@ def candlestick_to_sql(data):
     """
         Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
     """
+
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
-        [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
-                       ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp'],
-                           axis=1)
+            [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
+            ).drop(
+                    ['candles', 'candles_collected', 'last_timestamp'],
+                    axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
 
@@ -174,9 +172,9 @@ def get_latest_date(exchange_id, trading_pair, period):
         LIMIT 1;
     """
     latest_date = safe_q1(q, {'exchange_id': exchange_id,
-                              'trading_pair': trading_pair,
-                              'period': period
-                              })
+        'trading_pair': trading_pair,
+        'period': period
+        })
     if latest_date is None:
         print('No latest date')
 
@@ -290,8 +288,6 @@ def get_avg_candle(query):
        TODO batch query for improved performance."""
 
     assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
-
-    print( query )
 
     q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
