@@ -137,6 +137,8 @@
     "timestamp_format": "iso8601",
     "pair_uppercase": true,
     "pair_dash_seperator": true,
+	"comment" : "Had issues with this api, won't use.",
+	"disabled" : true,
     "candlestick_order": [
       3,
       2,
@@ -148,8 +150,15 @@
     "limit": 300
   },
   "poloniex": {
+   "api_call" :"https://poloniex.com/public?command=returnChartData&currencyPair={trading_pair}&start={start}&end={end}&period={period}",
     "pair_uppercase": true,
-    "candlestick_no_conversion": true,
-    "exchanges": {}
+	"pair_reverse" : true,
+	"comment" : "Expects for example BTC_ETH instead of the other way around",
+    "exchanges": {
+		"poloniex" : [
+          "eth_btc",
+          "btc_usdt"
+       ]
+   }
   }
 }

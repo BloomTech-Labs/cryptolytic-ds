@@ -119,9 +119,10 @@ def add_candle_data_to_table(df, cur):
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-    df['timestamp'] = df['timestamp'].apply(int)
-    num_cols = ['open', 'high', 'low', 'close', 'volume']
-    df[num_cols] = df[num_cols].apply(pd.to_numeric)
+#    df['timestamp'] = df['timestamp'].apply(int)
+#    num_cols = ['open', 'high', 'low', 'close', 'volume']
+#    df[num_cols] = df[num_cols].apply(pd.to_numeric)
+    df = fix_df(df)
     print(df.head())
     args_str = None
 
@@ -295,7 +296,7 @@ def get_avg_candle(query):
 
     q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    intermediate = safe_q2(q, query)
+    intermediate = safe_qall(q, query)
 
     # Query to get previous volume for the trading pair
     q2 = """select prev_volume from (select *, lag(volume, 1) over
@@ -305,11 +306,12 @@ def get_avg_candle(query):
 ;    """
     ohclv = ["open", "high", "close", "low", "timestamp"]
     result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
-    result['volume'] = safe_q2(q2, query)
+    result['volume'] = safe_q1(q2, query)
+
     return result
 
 
-def get_arb_signal(info, n=1000):
+def get_arb_info(info, n=1000):
     """
     Example: info := {'start':1556668800, 'period':300, 'trading_pair':'eth_btc', 'exchange_id':'binance'}
     """
@@ -327,17 +329,16 @@ def get_arb_signal(info, n=1000):
            group by (timestamp)
            )
 
-          select exchange,trading_pair, thing.timestamp, "period", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
+          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
                  (sub inner join thing on sub.timestamp = thing.timestamp)
           where exchange=%(exchange_id)s
           order by thing.timestamp
-          limit %(n)s
-          ;
+          limit %(n)s;
     """
 
     results = safe_qall(q, info)
     if results is not None:
         # arb_signal is more interpretable than arb_diff but the signal is the same
-        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "arb_diff", "arb_signal"])
+        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
         return fix_df(df)
 

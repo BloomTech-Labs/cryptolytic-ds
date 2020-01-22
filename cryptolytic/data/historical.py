@@ -49,6 +49,12 @@ def trading_pair_info(api, x):
     baseId, quoteId = x.split('_')
     handled = False
 
+    if api_info.get(api).get("pair_reverse"):
+        temp = baseId
+        baseId = quoteId
+        quoteId = temp
+        x = baseId + '_' + quoteId
+        handled = True
     if api_info.get(api).get("pair_no_underscore"):
         x = x.replace('_', '')
         handled = True
@@ -73,6 +79,7 @@ def trading_pair_info(api, x):
 def convert_candlestick(candlestick, api, timestamp):
     # dict with keys :open, :high, :low, :close, :volume, :quoteVolume, :timestamp
     candlestick_old = candlestick
+    print(candlestick)
     candlestick = candlestick.copy()
     ohclv = ["open", "high", "close", "low", "volume", "timestamp"]
     corder = api_info[api].get('candlestick_order')
@@ -88,6 +95,8 @@ def convert_candlestick(candlestick, api, timestamp):
         candlestick['low'] = candlestick.pop('min')
     elif api=='coincap':
         candlestick['timestamp'] = candlestick.pop('period')
+    elif api=='poloniex':
+        candlestick['timestamp'] = candlestick.pop('date')
     else:
         raise Exception('API not supported ', api)
 
@@ -121,10 +130,10 @@ def format_apiurl(api, params={}):
     url = None
     params = params.copy()
     # Coincap expects milliseconds in its url query
-    if api_info.get(api).get("timestamp_format") == "milliseconds":
+    if api_info[api].get("timestamp_format") == "milliseconds":
         params['start'] *= 1000
         params['end']  *= 1000
-    if api_info.get(api).get("timestamp_format") == "iso8601":
+    if api_info[api].get("timestamp_format") == "iso8601":
         params['start'] = datetime.utcfromtimestamp(params['start'])
         params['end'] = datetime.utcfromtimestamp(params['end'])
     # Standard URL query
@@ -257,6 +266,8 @@ def yield_unique_pair():
     api_iter = api_info.items()
     for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
+        if api_info[api].get('disabled') == True: 
+            continue
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
                 yield (api, exchange_id, trading_pair)
@@ -310,6 +321,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
                                    period=period,
                                    limit=limit)
     except Exception as e:
+        print('Test')
         print(e)
         logging.error(e)
 
@@ -374,28 +386,39 @@ def live_update(period = 300): # Period default is 5 minutes
 
 # hitbtc
 def fill_missing_candles():
-    missing = sql.get_missing_timesteps()
+    #missing = sql.get_missing_timesteps()
+    missing = pd.DataFrame({'api': ['hitbtc'], 
+                            'exchange': ['hitbtc'],
+                            'period': [60],
+                            'trading_pair': ['eth_btc'],
+                            'timestamp': [1576235400],
+                            'ntimestamp': [1576235520]})
     print(missing)
-    for i, s in missing.iterrows():
-        api, exchange, period, trading_pair, timestamp, ntimestamp = s
-        print(int(timestamp))
-        # first try to update with an api call
-        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
+#    for i, s in missing.iterrows():
+#        api, exchange, period, trading_pair, timestamp, ntimestamp = s
+#        print(int(timestamp))
+#        # first try to update with an api call
+#        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
     # For those that are still missing, impute their value
-    missing = sql.get_missing_timesteps()
+#    missing = sql.get_missing_timesteps()
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
         candles = []
+        if api == 'coinbase': continue
         last_timestep = 0
-        for ts in range(timestamp, ntimestamp, int(period)):
+        for ts in range(timestamp+int(period), ntimestamp, int(period)):
             print("Imputing values for ", exchange, trading_pair, ts)
             candle = sql.get_avg_candle({'timestamp': ts,
                                          'trading_pair': trading_pair,
                                          'period': period,
                                          'exchange': exchange})
+
             last_timestep = candle['timestamp'] = ts
+            print(pd.to_numeric(candle['volume']))
             candles.append(candle)
+            break
+
 
         candle_info = dict(
             api=api,
@@ -406,4 +429,6 @@ def fill_missing_candles():
             candles_collected=len(candles),
             period=period)  # period in seconds
 
-        sql.candlestick_to_sql(candle_info)
+        print(candle_info)
+ 
+        #sql.candlestick_to_sql(candle_info)
