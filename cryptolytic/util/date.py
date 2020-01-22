@@ -2,7 +2,8 @@ from datetime import datetime
 import time
 
 def convert_datetime(t):
-    """Convert value to unix time stamp if not. Currently handles %d-%m-%Y"""
+    """Convert string to unix time stamp if not. Currently handles %d-%m-%Y
+       Consider using something more convenient like the arrow library."""
     try:
         if isinstance(t, str):
             converted = datetime.strptime(t, '%d-%m-%Y')

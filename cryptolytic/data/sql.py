@@ -1,12 +1,16 @@
 import psycopg2 as ps
 import os
+import cryptolytic.data as d
 from cryptolytic.data import historical
+from cryptolytic.util import *
 import cryptolytic.util.date as date
 import time
 import pandas as pd
 import json
 from itertools import repeat
 
+
+ohlc = ["open", "high", "low", "close"]
 
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
@@ -119,10 +123,10 @@ def add_candle_data_to_table(df, cur):
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-    df['timestamp'] = df['timestamp'].apply(int)
-    num_cols = ['open', 'high', 'low', 'close', 'volume']
-    df[num_cols] = df[num_cols].apply(pd.to_numeric)
+    df = d.fix_df(df)
+    
     print(df.head())
+    print(len(df))
     args_str = None
 
     try:
@@ -145,13 +149,14 @@ def candlestick_to_sql(data):
     """
         Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
     """
+
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
-        [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
-                       ).drop(
-                           ['candles', 'candles_collected', 'last_timestamp'],
-                           axis=1)
+            [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
+            ).drop(
+                    ['candles', 'candles_collected', 'last_timestamp'],
+                    axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
 
@@ -167,24 +172,15 @@ def get_latest_date(exchange_id, trading_pair, period):
         LIMIT 1;
     """
     latest_date = safe_q1(q, {'exchange_id': exchange_id,
-                              'trading_pair': trading_pair,
-                              'period': period
-                              })
+        'trading_pair': trading_pair,
+        'period': period
+        })
     if latest_date is None:
         print('No latest date')
 
     return latest_date
 
 
-def fix_df(df):
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-    numeric = ['period', 'open', 'close', 'high', 'low', 'volume', 'arb_diff', 'arb_signal']
-    for col in numeric:
-        if col not in df.columns:
-            continue
-        df[col] = pd.to_numeric(df[col])
-    df = df.set_index('datetime')
-    return df
 
 
 def get_some_candles(info, n=10000, verbose=False):
@@ -232,7 +228,7 @@ def get_some_candles(info, n=10000, verbose=False):
     # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
     df = pd.DataFrame(results, columns=columns)  
     df['period'] = info['period']
-    return fix_df(df)
+    return d.fix_df(df)
 
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
@@ -295,7 +291,7 @@ def get_avg_candle(query):
 
     q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    intermediate = safe_q2(q, query)
+    intermediate = safe_qall(q, query)
 
     # Query to get previous volume for the trading pair
     q2 = """select prev_volume from (select *, lag(volume, 1) over
@@ -303,13 +299,57 @@ def get_avg_candle(query):
             order by "timestamp") as prev_volume from candlesticks) q
             where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
 ;    """
-    ohclv = ["open", "high", "close", "low", "timestamp"]
-    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
-    result['volume'] = safe_q2(q2, query)
+    ohlc = ["open", "high", "low", "close", "timestamp"]
+    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohlc)}
+    result['volume'] = safe_q1(q2, query)
+
     return result
 
 
-def get_arb_signal(info, n=1000):
+def batch_avg_candles(info):
+    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
+
+    assert len(info['timestamps']) >= 2
+    info['timestamps'] = tuple(info['timestamps'])
+
+    q = """
+        select "timestamp", avg("open"), avg(high), avg(low), avg("close") from candlesticks
+        where timestamp in %(timestamps)s and trading_pair=%(trading_pair)s and period=%(period)s
+        group by timestamp;
+    """
+
+    result = safe_qall(q, info)
+    df = pd.DataFrame(result, columns=['timestamp', 'open', 'high', 'low', 'close'])
+    df[ohlc] = df[ohlc].apply(pd.to_numeric)
+    return d.fix_df(df)
+
+
+def batch_last_volume_candles(info):
+    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
+    info_copy = info.copy()
+    # get the previous volumes, so minus the period, forward 
+    # fills if this still has nans
+    info['timestamps'] = mapl(lambda x: x-info['period'], info['timestamps'])
+
+    assert len(info['timestamps']) >= 2
+    info['timestamps'] = tuple(info['timestamps'])
+
+    q = """with sub as (select "timestamp", volume from candlesticks
+        where trading_pair=%(trading_pair)s and "period"=%(period)s and
+        "timestamp" in %(timestamps)s and exchange=%(exchange)s)
+        select "timestamp"+%(period)s, volume from sub;"""
+
+    volumes = safe_qall(q, info)
+
+    volumes = pd.DataFrame(volumes, columns=['timestamp', 'volume'])
+    df = pd.DataFrame({'timestamp': info_copy['timestamps']})
+    df = df.merge(volumes, how='left', on='timestamp')
+    return d.fix_df(df.ffill().bfill())
+    
+
+
+
+def get_arb_info(info, n=1000):
     """
     Example: info := {'start':1556668800, 'period':300, 'trading_pair':'eth_btc', 'exchange_id':'binance'}
     """
@@ -327,17 +367,16 @@ def get_arb_signal(info, n=1000):
            group by (timestamp)
            )
 
-          select exchange,trading_pair, thing.timestamp, "period", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
+          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
                  (sub inner join thing on sub.timestamp = thing.timestamp)
           where exchange=%(exchange_id)s
           order by thing.timestamp
-          limit %(n)s
-          ;
+          limit %(n)s;
     """
 
     results = safe_qall(q, info)
     if results is not None:
         # arb_signal is more interpretable than arb_diff but the signal is the same
-        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "arb_diff", "arb_signal"])
-        return fix_df(df)
+        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
+        return d.fix_df(df)
 
