@@ -1,7 +1,12 @@
 {
   "cryptowatch": {
     "api_call": "https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
-    "exchanges": {},
+    "exchanges": {
+		"gemini" : [
+				"eth_btc",
+				"btc_usdt"
+		]
+	},
     "timestamp_format": "seconds",
     "pair_no_underscore": true,
     "candlestick_order": [
@@ -10,10 +15,13 @@
       0,
       3,
       4
-    ]
+    ],
+	"comment" : "Looked up in environment variables",
+	"apikey" : "cryptowatch_secret_key"
   },
   "coincap": {
     "api_call": "http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
+	"slow":true,
     "exchanges": {
       "binance": {
         "trading_pairs": [

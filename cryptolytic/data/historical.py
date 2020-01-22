@@ -196,12 +196,16 @@ def conform_json_response(api, json_response):
 
 
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
-                 start=1546300800, limit=100, period=300, apikey=None):
+                 start=1546300800, limit=100, period=300):
     """period: candlestick length in seconds. Default 300 seconds.
-       limit: number of candles to pull
+       limit: number of candles to pull.
+       start: start time in unix timestamp format
     """
-    if api in {'cryptowatch'} and apikey==None:
-        raise Exception('Missing API key')
+
+    apikey =  None
+    if api_info[api].get('apikey'):
+        apikey = os.environ.get(apikey)
+
 
     # Variable initialization
     pair_info = trading_pair_info(api, trading_pair)
