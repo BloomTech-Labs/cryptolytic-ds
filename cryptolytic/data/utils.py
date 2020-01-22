@@ -24,7 +24,7 @@ def postgres_db_conn(credentials):
 # Before running the functions below, add two schemas to
 # your PostgreSQL database, one named 'fiveminute', the other named 'onehour'.
 
-# Define currency pairs within each exchange and create the names of the 
+# Define currency pairs within each exchange and create the names of the
 # tables for each exchange.
 
 coinbase_pro_pairs = ['bch_btc', 'bch_usd', 'btc_usd', 'btc_usdc', 'dash_btc',
@@ -32,22 +32,22 @@ coinbase_pro_pairs = ['bch_btc', 'bch_usd', 'btc_usd', 'btc_usdc', 'dash_btc',
                       'eth_usd', 'eth_usdc', 'ltc_btc', 'ltc_usd', 'xrp_btc',
                       'xrp_usd', 'zec_usdc', 'zrx_usd']
 
-bitfinex_pairs = ['bch_btc', 'bch_usd', 'bch_usdt', 'btc_usd', 'btc_usdt', 
-                  'dash_btc', 'dash_usd', 'eos_btc', 'eos_usd', 'eos_usdt', 
+bitfinex_pairs = ['bch_btc', 'bch_usd', 'bch_usdt', 'btc_usd', 'btc_usdt',
+                  'dash_btc', 'dash_usd', 'eos_btc', 'eos_usd', 'eos_usdt',
                   'etc_usd', 'eth_btc', 'eth_usd', 'eth_usdt', 'ltc_btc',
                   'ltc_usd', 'ltc_usdt', 'xrp_btc', 'xrp_usd', 'zec_usd',
                   'zrx_usd']
                   
 hitbtc_pairs = ['bch_btc', 'bch_usdt', 'btc_usdc', 'btc_usdt', 'dash_btc',
-                'dash_usdt', 'eos_btc', 'eos_usdt', 'etc_usdt', 'eth_btc', 
-                'eth_usdc', 'eth_usdt', 'ltc_btc', 'ltc_usdt', 'xrp_btc', 
+                'dash_usdt', 'eos_btc', 'eos_usdt', 'etc_usdt', 'eth_btc',
+                'eth_usdc', 'eth_usdt', 'ltc_btc', 'ltc_usdt', 'xrp_btc',
                 'xrp_usdt', 'zec_usdt', 'zrx_usdt']
 
 gemini_pairs = ['bch_btc', 'bch_usd', 'btc_usd', 'eth_btc', 'eth_usd',
                 'ltc_btc', 'ltc_usd', 'zec_usd']
 
 kraken_pairs = ['bch_btc', 'bch_usd', 'btc_usd', 'dash_btc', 'dash_usd',
-                'eos_btc', 'eos_usd', 'etc_usd', 'eth_btc', 'eth_usd', 
+                'eos_btc', 'eos_usd', 'etc_usd', 'eth_btc', 'eth_usd',
                 'ltc_btc', 'ltc_usd', 'xrp_btc', 'xrp_usd', 'zec_usd']
 
 hitbtc_table_list = ['hitbtc_' + pair for pair in hitbtc_pairs]
@@ -63,18 +63,19 @@ kraken_table_list = ['kraken_' + pair for pair in kraken_pairs]
 
 # Define create_tables function.
 def create_tables(credentials):
-    '''Connects to a PostgreSQL database and adds tables to each respective 
+    '''Connects to a PostgreSQL database and adds tables to each respective
     schema.'''
 
     # Create connection and cursor to database.
     conn, cur = create_conn(credentials)
-    
+
     # Define schemas and table_list.
     schemas = ['fiveminute', 'onehour']
-    
-    table_list = (hitbtc_table_list + bitfinex_table_list + 
-                  coinbase_pro_table_list + gemini_table_list + kraken_table_list)
-    
+
+    table_list = (hitbtc_table_list + bitfinex_table_list +
+                  coinbase_pro_table_list + gemini_table_list +
+                  kraken_table_list)
+
     # Loop through schemas and table_list.
     for schema in schemas:
         for table_name in table_list:

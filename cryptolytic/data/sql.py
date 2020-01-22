@@ -1,6 +1,7 @@
 import psycopg2 as ps
 import os
 from cryptolytic.data import historical
+import cryptolytic.util.date as date
 import time
 import pandas as pd
 import json
@@ -18,6 +19,41 @@ def get_credentials():
     }
 
 
+def get_conn():
+    conn = ps.connect(**get_credentials())
+    cursor = conn.cursor()
+    return conn, cursor
+
+
+def safe_q(q,  args={}, return_conn=False):
+    """Safe sql query"""
+    conn, cur = get_conn()
+    try:
+        cur.execute(q, args)
+        if return_conn:
+            return conn, cur
+        else:
+            return cur
+    except ps.OperationalError as e:
+        sql_error(e)
+        return
+
+
+def safe_q1(q, args={}, return_conn=False):
+    result = safe_q(q, args, return_conn).fetchone()
+    if result is not None:
+        return result[0]
+
+# like q1 but more appropriate in some cases
+def safe_q2(q, args={}, return_conn=False):
+    result = safe_q(q, args, return_conn).fetchone()
+    return result
+
+
+def safe_qall(q, args={}, return_conn=False):
+    return safe_q(q, args, return_conn).fetchall()
+
+
 def sql_error(error):
     """
         Documentation: http://initd.org/psycopg/docs/errors.html
@@ -28,25 +64,13 @@ def sql_error(error):
 
 
 def check_tables():
-    creds = get_credentials()
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """SELECT * FROM pg_catalog.pg_tables
-               WHERE schemaname != 'pg_catalog'
-               AND schemaname != 'information_schema';"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    results = cur.fetchall()
-    print(results)
+    return safe_qall("""SELECT * FROM pg_catalog.pg_table
+                      WHERE schemaname != 'pg_catalog'
+                      AND schemaname != 'information_schema';""")
 
 
 def create_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """CREATE TABLE candlesticks
+    q = """CREATE TABLE candlesticks
                 (api text not null,
                  exchange text not null,
                  trading_pair text not null,
@@ -56,77 +80,50 @@ def create_candle_table():
                  close numeric not null,
                  high numeric not null,
                  low numeric not null,
-                 volume numeric not null);"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    conn.commit()
+                 volume numeric not null,
+                 primary key (exchange, trading_pair, timestamp, period)
+                 );"""
+
+    # imputed boolean not null default FALSE
+    conn, cur = safe_q(q, return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def drop_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """DROP TABLE IF EXISTS candlesticks;"""
-    try:
-        cur.execute(query)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    conn.commit()
-
-
-def check_candle_table():
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    print('Checking Table candlesticks')
-    query = """SELECT * FROM candlesticks"""
-    cur.execute(query)
-    results = cur.fetchall()
-    print(results)
+    conn, cur = safe_q("DROP TABLE IF EXISTS candlesticks;", return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def get_table_schema(table_name):
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = f"""
-        select column_name, data_type, character_maximum_length
-        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
-    """
-    try:
-        cur.execute(query)
-        return cur.fetchall()
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+    q = """select column_name, data_type, character_maximum_length
+           from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s"""
+    return safe_qall(q, {'table_name': table_name})
 
 
 def get_table_columns(table_name):
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = f"""
+    q = """
         select column_name
-        from INFORMATION_SCHEMA.COLUMNS where table_name = '{table_name}';
-    """
-    try:
-        cur.execute(query)
-        return list(map(lambda x: x[0], cur.fetchall()))
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+        from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s;"""
+    results = safe_qall(q, {'table_name': table_name})
+    return list(map(lambda x: x[0], results))
 
 
 def add_candle_data_to_table(df, cur):
-    """
+    """pply(
         Builds a string from our data-set using the mogrify method which is
         then called once using the execute method
     """
- 
+
     order = get_table_columns('candlesticks')
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-    df['timestamp'] = df['timestamp'].apply(str)
+    df['timestamp'] = df['timestamp'].apply(int)
+    num_cols = ['open', 'high', 'low', 'close', 'volume']
+    df[num_cols] = df[num_cols].apply(pd.to_numeric)
+    print(df.head())
+    args_str = None
 
     try:
         x = [
@@ -137,64 +134,17 @@ def add_candle_data_to_table(df, cur):
         args_str = ','.join(x)
     except Exception as e:
         print('ERROR', e)
-        
     try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str)
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-
-def get_latest_date(exchange_id, trading_pair):
-    """
-        Return the latest date for a given trading pair on a given exchange
-    """
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    query = """
-        SELECT timestamp FROM candlesticks
-        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s
-        ORDER BY timestamp desc
-        LIMIT 1;
-    """
-    latest_date = None
-    try:
-        cur.execute(query,
-                    {'exchange_id': exchange_id,
-                     'trading_pair': trading_pair})
-        latest_date = cur.fetchone()
-        if latest_date is not None:
-            return latest_date[0]
-        print('No latest date')
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
-    return latest_date
-
-def get_some_candles(info, n=100):
-    """
-        Return n candles
-    """
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    n = min(n, 10000) # no number larger than 10_000
-    query = f"""
-        SELECT open, close, high, low, timestamp, volume FROM candlesticks
-        WHERE exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and 
-              period=%(period)s and timestamp >= %(start)s and timestamp <= %(end)s
-        LIMIT {n} ;
-    """
-    try:
-        cur.execute(query, info)
-        results = cur.fetchall()
-        # TODO probably 
-        df = pd.DataFrame(results, columns=get_table_columns('candlesticks'))
-        return df
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str + " except select * from candlesticks;")
     except ps.OperationalError as e:
         sql_error(e)
         return
 
 
 def candlestick_to_sql(data):
+    """
+        Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
+    """
     conn = ps.connect(**get_credentials())
     cur = conn.cursor()
     dfdata = pd.concat(
@@ -204,3 +154,156 @@ def candlestick_to_sql(data):
                            axis=1)
     add_candle_data_to_table(dfdata, cur)
     conn.commit()
+
+
+def get_latest_date(exchange_id, trading_pair, period):
+    """
+        Return the latest date for a given trading pair on a given exchange
+    """
+    q = """
+        SELECT timestamp FROM candlesticks
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
+        ORDER BY timestamp desc
+        LIMIT 1;
+    """
+    latest_date = safe_q1(q, {'exchange_id': exchange_id,
+                              'trading_pair': trading_pair,
+                              'period': period
+                              })
+    if latest_date is None:
+        print('No latest date')
+
+    return latest_date
+
+
+def get_some_candles(info, n=100, verbose=False):
+    """
+        Return n candles
+    """
+    n = min(n, 50000)  # no number larger than 50_000
+    select = "open, close, high, low, timestamp, volume" if not verbose else "*"
+    where = ''
+
+    assert 'period' in info.keys()  # Require period information
+    
+    # make sure dates are of right format
+    if 'start' in info:
+        info['start'] = date.convert_datetime(info['start'])
+    if 'end' in info:
+        info['end'] = date.convert_datetime(info['end']) 
+
+    def add_clause(where, key, clause):
+        if key in info.keys():
+            if len(where) == 0:
+                where = "WHERE " + clause + " "
+            else:
+                where += "AND " + clause + " "
+        return where
+
+    where = add_clause(where, 'exchange_id', "exchange=%(exchange_id)s")
+    where = add_clause(where, 'start', "timestamp >= %(start)s")
+    where = add_clause(where, 'end', "timestamp <= %(end)s")
+    where = add_clause(where, 'period', "period = %(period)s")
+    where = add_clause(where, 'trading_pair', "trading_pair=%(trading_pair)s")
+
+    q = f"""
+        SELECT {select} FROM candlesticks
+        {where}
+        ORDER BY timestamp asc
+        LIMIT {n};
+        """
+    results = safe_qall(q, info)
+    columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
+    # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
+    df = pd.DataFrame(results, columns=columns)  
+    return df
+
+
+def get_candles(info, n=100, verbose=False):
+    df = get_some_candles(info, n, verbose)
+    numeric = ['period', 'open', 'close', 'high', 'low', 'volume']
+    df[numeric] = df[numeric].apply(pd.to_numeric)
+    return df
+
+
+def get_api(api):
+    q = "SELECT * FROM candlesticks WHERE api = %(api)s"
+    safe_qall(q, {'api': api})
+
+
+def get_bad_timestamps(info):
+    q = """
+    select * from (select "timestamp", lead("timestamp", 1) over (order by "timestamp") ntimestamp
+    from candlesticks
+    where exchange=%(exchange_id)s and trading_pair=%(trading_pair)s and "period"=%(period)s q
+    where "timestamp" <> ntimestamp - 60;"""
+    assert {''}.issubset(info.keys())
+    return safe_qall(q, info)
+
+
+def remove_api(api):
+    """
+    Drop API from candle table
+    """
+    q = """DELETE FROM candlesticks
+           WHERE api = %(api)s"""
+    conn, cur = safe_q(q, {'api' : api}, return_conn=True)
+    if conn is not None:
+        print(f"Removed {api}")
+        conn.commit()
+
+
+def remove_duplicates():
+    """ 
+        Remove any duplicate candlestick information from the database. 
+    """
+    q = """
+        with q as (select *, "timestamp" - lag(timestamp, 1)
+                over (partition by(exchange, trading_pair, period) 
+                order by "timestamp"
+        ) as diff from candlesticks)
+        delete from candlesticks
+        where ctid in (
+                select ctid 
+                from q
+                where diff=0
+                order by timestamp);
+            """
+
+    conn, curr = safe_q(q, return_conn=True)
+    if conn is not None:
+        conn.commit()
+
+
+def get_missing_timesteps():
+    q = """
+        select api, exchange, period, trading_pair, "timestamp",  "timestamp" + diff as ntimestamp
+        from (select *, "timestamp" - lag(timestamp, 1)
+        over (partition by(exchange, trading_pair, period) order by "timestamp") as diff from candlesticks) q
+        where diff <> "period";
+    """
+    missing = safe_qall(q)
+
+    return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
+
+
+
+# Used for filling in missing candlestick values
+# expects timestamp, trading_pair, and period
+def get_avg_candle(query):
+    # Query to get avg price values
+    q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
+            where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
+    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
+    intermediate = safe_q2(q, query)
+
+    # Query to get previous volume for the trading pair
+    q2 = """select prev_volume from (select *, lag(volume, 1) over
+            (partition by (exchange, trading_pair, period)
+            order by "timestamp") as prev_volume from candlesticks) q
+            where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
+;    """
+    ohclv = ["open", "high", "close", "low", "timestamp"]
+    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohclv)}
+    result['volume'] = safe_q2(q2, query)
+    return result
