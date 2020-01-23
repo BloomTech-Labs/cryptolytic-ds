@@ -198,11 +198,11 @@ def plot_train_history(history, title):
     plt.show()
 
 
-def fit_model_from_raw_data(df, train_split=3000, history_size=720, target_size=5,
-                        step=5, single_step=False, buffer_size=10000,
-                        batch_size=256, model_epochs=9, steps_per_epoch=38,
-                        use_multiprocessing=True, workers=4,
-                        validation_steps=5):
+def fit_model_from_raw_data(df, train_split=3000, history_size=720,
+                            target_size=5, step=5, single_step=False,
+                            buffer_size=10000, batch_size=256, model_epochs=9,
+                            steps_per_epoch=38, use_multiprocessing=True,
+                            workers=4, validation_steps=5):
     '''
     Creates a model from the raw data using above functions as base
     Requires raw candlestick data
@@ -269,7 +269,8 @@ def fit_model_from_raw_data(df, train_split=3000, history_size=720, target_size=
 
 def predict_on_training_data(model, x_train, df):
     '''
-    Function predicts denormalized based on fitted model, training data, and actual results
+    Function predicts denormalized based on fitted model, training data,
+    and actual results
     Requires fitted model, data predicted on
     Outputs predicted values and shows plot
     '''
@@ -299,6 +300,8 @@ def predict_on_validation_data(model, x_val, y_val):
     val_actual = denormalize_results(y_val[:, 0])
 
     # Configure and plot the graph
-    plt.plot(np.arange(2000), d.denoise(val_actual[past_history:2000+past_history], 20), label='actual')
-    plt.plot(range(2000), d.denoise(val_preds[:, 0][:2000], 20), label='predicted');
+    plt.plot(np.arange(2000), d.denoise(
+        val_actual[past_history:2000+past_history], 20), label='actual')
+    plt.plot(range(2000), d.denoise(
+        val_preds[:, 0][:2000], 20), label='predicted');
     plt.legend();
