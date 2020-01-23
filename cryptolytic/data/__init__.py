@@ -24,6 +24,11 @@ def denoise(signal, repeat):
     return copy_signal
 
 
+# Normalize the dataset with (x-μ)/σ 
+def normalize(df):
+    pass
+
+
 def merge_candle_dfs(df1, df2):
     """Merge candle dataframes"""
     merge_cols = ['trading_pair', 'exchange', 'period', 'datetime', 'timestamp']
@@ -55,6 +60,10 @@ def nan_df(df):
     return df[df.isnull().any(axis=1)]
 
 
+def inner_merge(df1, df2):
+    return df1.merge(df2, how='inner', on=(df1.columns & df2.columns).tolist())
+
+
 def outer_merge(df1, df2):
     return df1.merge(df2, how='outer', on=(df1.columns & df2.columns).tolist())
 
@@ -81,7 +90,6 @@ def impute_df(df):
     df = df.copy()
     gapped = resample_ohlcv(df) 
     gaps = nan_df(gapped).index
-    print(gaps)
     # stop psycopg2 error with int conversion
     convert_datetime = compose(int, convert_datetime_to_timestamp)
     timestamps = mapl(convert_datetime, list(gaps)) 
@@ -89,7 +97,6 @@ def impute_df(df):
             'period': int(df['period'][0]),
             'exchange': df['exchange'][0],
             'timestamps': timestamps}
-    print(info)
     if len(info['timestamps']) >= 2:
         avgs = sql.batch_avg_candles(info)
         volumes = sql.batch_last_volume_candles(info)
@@ -103,15 +110,15 @@ def impute_df(df):
     return df
 
 
-def get_df(info):
+def get_df(info, n=1000):
     """
     Pull info from database and give it some useful augmentation for analysis
     """
-    df = sql.get_some_candles(info=info, n=100, verbose=True)
+    df = sql.get_some_candles(info=info, n=n, verbose=True)
     df = impute_df(df)
     
     df['diff'] = df['high'] - df['low']
-    dfarb = sql.get_arb_info(info)
+    dfarb = sql.get_arb_info(info, n)
     
     merged = merge_candle_dfs(df, dfarb)
     assert merged.isna().any().any() == False
