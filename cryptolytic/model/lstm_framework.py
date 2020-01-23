@@ -12,6 +12,7 @@ import cryptolytic.model as m
 
 # External general imports
 import pandas as pd
+import numpy as np
 from matplotlib.pylab import rcParams
 from IPython.core.display import HTML
 # to stop a warning message
@@ -23,7 +24,7 @@ import tensorflow.keras.layers as layers
 
 # Initialize figure size for plotting
 ohclv = ['open', 'high', 'close', 'low', 'volume']
-plt.style.use('ggplot')
+# plt.style.use('ggplot')
 rcParams['figure.figsize'] = 20, 7
 start.init()
 register_matplotlib_converters()
@@ -113,7 +114,7 @@ def multivariate_data(dataset, target, start_index, end_index=None,
     return np.array(data), np.array(labels)
 
 
-def lstm_model(train):
+def lstm_model(train, future_target=5):
     '''
     Function creates a LSTM model with train data
     Requires train data
@@ -212,12 +213,12 @@ def fit_model_from_raw_data(df, train_split=3000, history_size=720, target_size=
     df = feature_engineering(df)
 
     # Normalize the numerical data in dataset
-    dataset_normalized = normalize_df(df.get_numeric_data()).values
+    dataset_normalized = normalize_df(df._get_numeric_data()).values
 
     # Get target column for the model
     target = df.columns.get_loc('close') - 1
     # Get values for target column
-    y = dataset[:, target]
+    y = dataset_normalized[:, target]
 
     # Get x and y train and validation sets from normalized dataset
     x_train, y_train = multivariate_data(
@@ -249,7 +250,7 @@ def fit_model_from_raw_data(df, train_split=3000, history_size=720, target_size=
     val_data = val_data.batch(batch_size).repeat()
 
     # Create the LSTM model
-    model = lstm_model(x_train)
+    model = lstm_model(x_train, future_target=target_size)
 
     # Fit the LSTM model
     history = fit_model(
