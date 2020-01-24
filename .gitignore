@@ -10,3 +10,4 @@ scratch.py
 test.env
 log.txt
 *.vim
+models/*
