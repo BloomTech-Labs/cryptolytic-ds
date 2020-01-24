@@ -101,16 +101,16 @@ def lstm_model():
 def plot_train_history(history, title):
     loss = history.history['loss']
     val_loss = history.history['val_loss']
-    
+
     epochs = range(len(loss))
-    
+
     plt.figure()
-    
+
     plt.plot(epochs, loss, 'b', label='Training loss')
     plt.plot(epochs, val_loss, 'r', label='Validation loss')
     plt.title(title)
     plt.legend()
-    
+
     plt.show()
 
 
@@ -121,10 +121,6 @@ def predictions():
     plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted');
     plt.legend();
     return preds
-
-
-    
-plot_train_history(history, 'Multi Step Training and validation loss') 
 
 
 def fit_model():

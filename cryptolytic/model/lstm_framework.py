@@ -152,14 +152,14 @@ def fit_model(model, train_data, validation_data, epochs=9, steps_per_epoch=38,
     workers, and validation steps
     Returns fit model
     '''
-    fit_model = model.fit(train_data,
-                          epochs=epochs,
-                          steps_per_epoch=steps_per_epoch,
-                          use_multiprocessing=use_multiprocessing,
-                          workers=workers,
-                          validation_data=validation_data,
-                          validation_steps=validation_steps)
-    return fit_model
+    model.fit(train_data,
+              epochs=epochs,
+              steps_per_epoch=steps_per_epoch,
+              use_multiprocessing=use_multiprocessing,
+              workers=workers,
+              validation_data=validation_data,
+              validation_steps=validation_steps)
+    return model
 
 
 def multi_step_plot(history, true_future, prediction):
