@@ -118,6 +118,7 @@ def get_df(info, n=1000):
     df = impute_df(df)
     
     df['diff'] = df['high'] - df['low']
+    df['diff2'] = df['close'] - df['open']
     dfarb = sql.get_arb_info(info, n)
     
     merged = merge_candle_dfs(df, dfarb)

@@ -51,34 +51,34 @@ def multivariate_data(dataset, target, start_index, end_index, history_size,
 
 # define function to load data for training and validation
 def data_load():
-#    # load data
-#    TRAIN_SPLIT = 3000
-#    # dataset = normalize_df(df._get_numeric_data()).values
-#    dataset = normalize_df(df._get_numeric_data()).values
-#    target = df.columns.get_loc('close') - 1
-#    y = dataset[:, target]
-#    past_history = 720
-#    future_target = 5
-#    STEP = 3
-#
-#
-#    x_train, y_train = multivariate_data(dataset, y, 0,
-#                                                       TRAIN_SPLIT, past_history,
-#                                                       future_target, STEP,
-#                                                       single_step=False)
-#    x_val, y_val = multivariate_data(dataset, y,
-#                                                   TRAIN_SPLIT, None, past_history,
-#                                                   future_target, STEP,
-#                                                   single_step=False)
-#   print ('Single window of past history : {}'.format(x_train[0].shape))
-#   print ('\n Target temperature to predict : {}'.format(y_train[0].shape)) 
-#   BUFFER_SIZE = 10_000
-#   BATCH_SIZE = 256
-#   train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-#   train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
-#
-#   val_data = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-#   val_data = val_data.batch(BATCH_SIZE).repeat()
+    #    # load data
+    #    TRAIN_SPLIT = 3000
+    #    # dataset = normalize_df(df._get_numeric_data()).values
+    #    dataset = normalize_df(df._get_numeric_data()).values
+    #    target = df.columns.get_loc('close') - 1
+    #    y = dataset[:, target]
+    #    past_history = 720
+    #    future_target = 5
+    #    STEP = 3
+    #
+    #
+    #    x_train, y_train = multivariate_data(dataset, y, 0,
+    #                                                       TRAIN_SPLIT, past_history,
+    #                                                       future_target, STEP,
+    #                                                       single_step=False)
+    #    x_val, y_val = multivariate_data(dataset, y,
+    #                                                   TRAIN_SPLIT, None, past_history,
+    #                                                   future_target, STEP,
+    #                                                   single_step=False)
+    #   print ('Single window of past history : {}'.format(x_train[0].shape))
+    #   print ('\n Target temperature to predict : {}'.format(y_train[0].shape)) 
+    #   BUFFER_SIZE = 10_000
+    #   BATCH_SIZE = 256
+    #   train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+    #   train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
+    #
+    #   val_data = tf.data.Dataset.from_tensor_slices((x_val, y_val))
+    #   val_data = val_data.batch(BATCH_SIZE).repeat()
 
     '''
     code for data loading here
@@ -101,16 +101,16 @@ def lstm_model():
 def plot_train_history(history, title):
     loss = history.history['loss']
     val_loss = history.history['val_loss']
-    
+
     epochs = range(len(loss))
-    
+
     plt.figure()
-    
+
     plt.plot(epochs, loss, 'b', label='Training loss')
     plt.plot(epochs, val_loss, 'r', label='Validation loss')
     plt.title(title)
     plt.legend()
-    
+
     plt.show()
 
 
@@ -121,10 +121,6 @@ def predictions():
     plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted');
     plt.legend();
     return preds
-
-
-    
-plot_train_history(history, 'Multi Step Training and validation loss') 
 
 
 def fit_model():
