@@ -280,13 +280,14 @@ def predict_on_training_data(model, x_train, df):
 
     # Configure the graph
     rcParams['figure.figsize'] = 20, 3
-    plt.plot(np.arange(2000), d.denoise(actual[past_history:2000+past_history], 5), label='actual')
-    plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted');
-    plt.legend();
+    plt.plot(np.arange(2000), d.denoise(actual[past_history:2000+past_history],
+                                        5), label='actual')
+    plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted')
+    plt.legend()
 
     # Plot the model
     plt.title('All predictions')
-    plt.plot(range(2000), d.denoise(preds[:2000], 5));
+    plt.plot(range(2000), d.denoise(preds[:2000], 5))
 
     return preds
 
@@ -303,5 +304,5 @@ def predict_on_validation_data(model, x_val, y_val):
     plt.plot(np.arange(2000), d.denoise(
         val_actual[past_history:2000+past_history], 20), label='actual')
     plt.plot(range(2000), d.denoise(
-        val_preds[:, 0][:2000], 20), label='predicted');
-    plt.legend();
+        val_preds[:, 0][:2000], 20), label='predicted')
+    plt.legend()
