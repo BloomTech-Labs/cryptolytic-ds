@@ -63,3 +63,7 @@ def dict_matches(cond, b):
 def select_keys(d, keys):
     return {k: d[k] for k in keys if k in d}
 
+class adict(dict):
+    def __init__(self, *args, **kwargs):
+        super(adict, self).__init__(*args, **kwargs)
+        self.__dict__ = self

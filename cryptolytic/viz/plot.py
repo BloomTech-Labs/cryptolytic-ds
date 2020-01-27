@@ -77,3 +77,22 @@ def simple_plot(df, x):
     rcParams['figure.figsize'] = 20,4
     plt.plot(df.index, np.log(df['close']), color='pink')
     plt.plot(df.index, np.log(df['close'].rolling(x).mean()), color='black')
+
+
+def plot_states(ts_vals, states, time_vals):
+    fig, ax1 = plt.subplots()
+
+    color = 'tab:red'
+    ax1.set_ylabel('Data',         color=color)
+    ax1.plot(time_vals, ts_vals,      color=color)
+    ax1.tick_params(axis='y',            labelcolor=color)
+
+    ax2 = ax1.twinx()  
+    color = 'tab:blue'
+    ax2.set_ylabel('Hidden state', color=color)  
+    ax2.plot(time_vals,states,     color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    plt.title(f'{len(np.unique(states))} State Model')
+    fig.tight_layout()  
+    plt.show()

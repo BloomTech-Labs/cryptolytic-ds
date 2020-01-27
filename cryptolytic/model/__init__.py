@@ -17,6 +17,3 @@ def pearson(a, b):
         np.sqrt((np.sum(adiff)**2 * np.sum(bdiff)**2))
     )
     return ans
-
-
-
