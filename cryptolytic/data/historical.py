@@ -303,12 +303,13 @@ def sample_every_pair(n=3000, query={}):
 
 
 # returns true if updated, or None if the task should be dropped
-def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retries=0):
+def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
+                num_retries=0):
     if num_retries > 100:
         return
 
     # limit to 100 candles if limit is not specified
-    limit = api_info.get(api).get('limit') or 100 
+    limit = api_info.get(api).get('limit') or 100
     candle_info = None
 
     try:  # Get candle information
@@ -328,8 +329,9 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
         print('Retry')
-        return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
-    
+        return update_pair(api, exchange_id, trading_pair,
+                           timestamp+limit*period, period, num_retries + 1)
+
     # Print the timestamp
     ts = candle_info['last_timestamp']
     print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
@@ -339,34 +341,35 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
 
         sql.candlestick_to_sql(candle_info)
-        return True # ran without error
+        return True  # ran without error
     except Exception as e:
         logging.error(e)
 
 
-def live_update(period = 300): # Period default is 5 minutes
+def live_update(period=300):  # Period default is 5 minutes
     """
-        Updates the database based on the info in data/api_info.json with new candlestick info,
-        grabbing data from the last timestamp until now, with the start date set at the start of 2019.
+        Updates the database based on the info in data/api_info.json with
+        new candlestick info, grabbing data from the last timestamp until now,
+        with the start date set at the start of 2019.
     """
     now = time.time()
 
-    # use a deque to rotate the tasks, and pop them when they are done. 
+    # use a deque to rotate the tasks, and pop them when they are done.
     # this is to avoid sending too many requests to one api at once.
     d = deque()
-    
+
     for api, exchange_id, trading_pair in yield_unique_pair():
         d.append([api, exchange_id, trading_pair])
-    
+
     for i in range(10_000):
-        if len(d)==0:
+        if len(d) == 0:
             break
         api, exchange_id, trading_pair = d[-1]  # get the current task
         print(api, exchange_id, trading_pair)
 
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
-            
-        # already at the latest date, remove 
+
+        # already at the latest date, remove
         if start >= round(now)-period:
             d.pop() 
             continue
@@ -381,7 +384,7 @@ def live_update(period = 300): # Period default is 5 minutes
 
 
 def fill_missing_candles():
-    #missing = sql.get_missing_timesteps()
+    # missing = sql.get_missing_timesteps()
     missing = pd.DataFrame({'api': ['hitbtc'], 
                             'exchange': ['hitbtc'],
                             'period': [60],
@@ -400,7 +403,7 @@ def fill_missing_candles():
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
         candles = []
-        if api == 'coinbase': continue
+        if api == 'coinbase':continue
         last_timestep = 0
         for ts in range(timestamp+int(period), ntimestamp, int(period)):
             print("Imputing values for ", exchange, trading_pair, ts)
@@ -414,7 +417,6 @@ def fill_missing_candles():
             candles.append(candle)
             break
 
-
         candle_info = dict(
             api=api,
             exchange=exchange,
@@ -425,5 +427,5 @@ def fill_missing_candles():
             period=period)  # period in seconds
 
         print(candle_info)
- 
-        #sql.candlestick_to_sql(candle_info)
+
+        # sql.candlestick_to_sql(candle_info)

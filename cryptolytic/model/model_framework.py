@@ -18,7 +18,7 @@ def normalize_df(df):
     df = df.copy()
     df = df._get_numeric_data()
     # normalize each point by dividing by the inital point and subtracting 1
-    for col in df.columns: 
+    for col in df.columns:
         df[col] = (df[col] / (df[col][0] + 1e-5)) - 1
     return df
 
@@ -32,53 +32,53 @@ def multivariate_data(dataset, target, start_index, end_index, history_size,
                       target_size, step, single_step=False):
     data = []
     labels = []
-    
+
     start_index = start_index + history_size
     if end_index is None:
         end_index = len(dataset) - target_size
-    
+
     for i in range(start_index, end_index):
         indices = range(i-history_size, i, step)
         data.append(dataset[indices])
-        
+
         if single_step:
             labels.append(target[i+target_size])
         else:
             labels.append(target[i:i+target_size])
-    
+
     return np.array(data), np.array(labels)
 
 
 # define function to load data for training and validation
 def data_load():
-    #    # load data
-    #    TRAIN_SPLIT = 3000
-    #    # dataset = normalize_df(df._get_numeric_data()).values
-    #    dataset = normalize_df(df._get_numeric_data()).values
-    #    target = df.columns.get_loc('close') - 1
-    #    y = dataset[:, target]
-    #    past_history = 720
-    #    future_target = 5
-    #    STEP = 3
-    #
-    #
-    #    x_train, y_train = multivariate_data(dataset, y, 0,
-    #                                                       TRAIN_SPLIT, past_history,
-    #                                                       future_target, STEP,
-    #                                                       single_step=False)
-    #    x_val, y_val = multivariate_data(dataset, y,
-    #                                                   TRAIN_SPLIT, None, past_history,
-    #                                                   future_target, STEP,
-    #                                                   single_step=False)
-    #   print ('Single window of past history : {}'.format(x_train[0].shape))
-    #   print ('\n Target temperature to predict : {}'.format(y_train[0].shape)) 
-    #   BUFFER_SIZE = 10_000
-    #   BATCH_SIZE = 256
-    #   train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    #   train_data = train_data.cache().shuffle(BUFFER_SIZE).batch(BATCH_SIZE).repeat()
-    #
-    #   val_data = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-    #   val_data = val_data.batch(BATCH_SIZE).repeat()
+    # load data
+    TRAIN_SPLIT = 3000
+    # dataset = normalize_df(df._get_numeric_data()).values
+    dataset = normalize_df(df._get_numeric_data()).values
+    target = df.columns.get_loc('close') - 1
+    y = dataset[:, target]
+    past_history = 720
+    future_target = 5
+    STEP = 3
+
+    x_train, y_train = multivariate_data(dataset, y, 0,
+                                         TRAIN_SPLIT, past_history,
+                                         future_target, STEP,
+                                         single_step=False)
+    x_val, y_val = multivariate_data(dataset, y,
+                                     TRAIN_SPLIT, None, past_history,
+                                     future_target, STEP,
+                                     single_step=False)
+    print('Single window of past history : {}'.format(x_train[0].shape))
+    print('\n Target temperature to predict : {}'.format(y_train[0].shape))
+    BUFFER_SIZE = 10_000
+    BATCH_SIZE = 256
+    train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+    train_data = train_data.cache().shuffle(BUFFER_SIZE).\
+        batch(BATCH_SIZE).repeat()
+
+    val_data = tf.data.Dataset.from_tensor_slices((x_val, y_val))
+    val_data = val_data.batch(BATCH_SIZE).repeat()
 
     '''
     code for data loading here
@@ -93,7 +93,8 @@ def lstm_model():
     model.add(layers.LSTM(128, return_sequences=True))
     model.add(layers.LSTM(128, activation='relu'))
     model.add(layers.Dense(future_target))
-    model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001), loss='mse')
+    model.compile(optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001),
+                  loss='mse')
     return model
 
 
@@ -116,10 +117,11 @@ def plot_train_history(history, title):
 
 def predictions():
     preds = denormalize_results(model.predict(x_train))
-    rcParams['figure.figsize'] = 20,3
-    plt.plot(np.arange(2000), d.denoise(actual[past_history:2000+past_history], 5), label='actual')
-    plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted');
-    plt.legend();
+    rcParams['figure.figsize'] = 20, 3
+    plt.plot(np.arange(2000), d.denoise(actual[past_history:2000+past_history],
+                                        5), label='actual')
+    plt.plot(range(2000), d.denoise(preds[:, 0][:2000], 5), label='predicted')
+    plt.legend()
     return preds
 
 
@@ -128,12 +130,12 @@ def fit_model():
     model = lstm_model(x_train)
 
     history = model.fit(train_data,
-                        epochs=9, 
+                        epochs=9,
                         steps_per_epoch=38,
                         use_multiprocessing=True,
                         workers=4,
                         validation_data=val_data,
-                        validation_steps=5) #(x_val, y_val)) 
+                        validation_steps=5)  # (x_val, y_val))
 
 
 def create_framework_lstm(x_train, lstm_output_dimensionality=1):
