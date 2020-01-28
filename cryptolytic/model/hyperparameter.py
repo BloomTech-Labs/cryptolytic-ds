@@ -9,6 +9,7 @@ import scipy.stats
 # from scipy.stats import yeojohnson
 import os
 from cryptolytic.util import *
+from kerastuner.tuners import RandomSearch
 
 # tensorflow import
 import tensorflow as tf
@@ -82,3 +83,17 @@ def run_tuning():
 def evaluate_models(models):
     for m in models:
         _, acc = model.evaluate(x_val, y_val)
+
+
+def random_keras_tuner(compiled_model, objective='val_accuracy', max_trials=5,
+                       executions_per_trial=3):
+    tuner = RandomSearch(
+        compiled_model,
+        objective=objective,
+        max_trials=max_trials,
+        executions_per_trial=executions_per_trial,
+        directory='cryptolytic-ds'
+        project_name='cryptolytic'
+    )
+    tuner.results_summary()
+    return tuner

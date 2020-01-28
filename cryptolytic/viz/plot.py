@@ -28,7 +28,7 @@ def plot_all_candlesticks(df):
     trading_pair, and period
     """
     for groupkey, group in df.groupby(
-        ['api', 'exchange', 'trading_pair', 'period']):
+            ['api', 'exchange', 'trading_pair', 'period']):
         api, exchange_id, trading_pair = groupkey
         print(api, exchange_id, trading_pair)
         yield candlestick(group)
