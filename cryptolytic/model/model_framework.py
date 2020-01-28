@@ -180,7 +180,7 @@ def fit_stacked_model(models, inputX, inputy):
     return model
 
 
-def create_model(x_train, params, batch_size=200, lahead=12*3, ):
+def create_model(x_train, batch_size, lahead):
     attention_size = 5
     input_shape = x_train.shape[-2:]
     X_input = Input(input_shape, batch_size=batch_size)
