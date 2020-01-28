@@ -5,19 +5,22 @@
 		"gemini" : {
 				"trading_pairs" : [
 						"eth_btc",
-						"btc_usdt"
+						"btc_usd"
+				]
+		},
+		"kraken" : {
+				"trading_pairs" : [
+						"eth_btc",
+						"btc_usd",
+						"bat_btc",
+						"link_eth",
+						"bch_btc"
 				]
 		}
 	},
     "timestamp_format": "seconds",
     "pair_no_underscore": true,
-    "candlestick_order": [
-      1,
-      2,
-      0,
-      3,
-      4
-    ],
+    "candlestick_order": [1, 2, 3, 4, 5, 0],
 	"comment" : "Looked up in environment variables",
 	"apikey" : "cryptowatch_secret_key"
   },
@@ -28,7 +31,10 @@
       "binance": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usdt"
+          "btc_usdt",
+		  "bat_btc",
+		  "link_eth",
+		  "bch_btc"
         ]
       }
     },
@@ -62,7 +68,8 @@
       "hitbtc": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "bat_btc"
         ]
       }
     },
@@ -96,7 +103,9 @@
       "bitfinex": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "bat_btc",
+		  "bch_btc"
         ]
       }
     },
@@ -140,7 +149,9 @@
       "coinbase": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "link_eth",
+		  "bch_btc"
         ]
       }
     },
@@ -168,7 +179,8 @@
 		"poloniex" : {
 				"trading_pairs":[
 		          "eth_btc",
-				  "btc_usdt"
+				  "btc_usdt",
+				  "bat_btc"
 				]
 		}
    }

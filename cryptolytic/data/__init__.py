@@ -1,4 +1,6 @@
 import numpy as np
+import ta
+from scipy.stats import yeojohnson
 import pandas as pd
 from cryptolytic.util import *
 import cryptolytic.data.sql as sql
@@ -22,12 +24,6 @@ def denoise(signal, repeat):
             # set previous timestep to be between the timestep i and i - 2
             copy_signal[i - 1] = (copy_signal[i - 2] + copy_signal[i]) / 2
     return copy_signal
-
-
-# Normalize the dataset with (x-μ)/σ 
-def normalize(df):
-    pass
-
 
 def merge_candle_dfs(df1, df2):
     """Merge candle dataframes"""
@@ -88,7 +84,10 @@ def impute_df(df):
     gaps or new nan values are filled with backwards fill.
     """
     df = df.copy()
+    print("df", df)
+    return df
     gapped = resample_ohlcv(df) 
+    print("Gapped", gapped)
     gaps = nan_df(gapped).index
     # stop psycopg2 error with int conversion
     convert_datetime = compose(int, convert_datetime_to_timestamp)
@@ -124,3 +123,93 @@ def get_df(info, n=1000):
     merged = merge_candle_dfs(df, dfarb)
     assert merged.isna().any().any() == False
     return merged
+
+
+def thing(arg, axis=0):
+    x = np.sign(arg) * np.log(np.abs(arg) + 1)
+    mu = np.nanmean(x, axis=axis)
+    std = np.nanstd(x, axis=axis)
+    return x, mu, std
+
+
+# Version 2 
+def normalize(A):
+    if isinstance(A, pd.DataFrame) or isinstance(A, pd.Series):
+        A = A.values
+    if np.ndim(A)==1:
+        A = np.expand_dims(A, axis=1)
+    A = A.copy()
+    x, mu, std = thing(A, axis=0)
+    for i in range(A.shape[1]):
+        A[:, i] = (x[:, i] - mu[i]) / std[i]
+    return A
+   
+
+def denormalize(values, df, col=None):
+    values = values.copy()
+    
+    def eq(x, mu, std):
+        return np.exp((x * std) + mu) - 1
+    
+    if np.ndim(values) == 1 and col is not None:
+        x, mu, std = thing(df[col])
+        return eq(values, mu, std)
+    else:
+        for i in range(values.shape[1]): 
+            x, mu, std = thing(df.iloc[:, i])
+            if isinstance(values, pd.DataFrame): 
+                values.iloc[:, i] = eq(values.iloc[:, i], mu, std)
+            else:
+                values[:, i] = eq(values[:, i], mu, std)
+        return values
+
+
+def windowed(df, target, batch_size, history_size, step, lahead=1, ratio=0.8):
+    xs = []
+    ys = []
+    
+    x = df
+    y = df[:, target]
+
+    start = history_size # 1000
+    end = df.shape[0] - lahead # 4990
+    # 4990 - 1000 = 3990
+    for i in range(start, end):
+        indices = range(i-history_size, i, step)
+        xs.append(x[indices])
+        ys.append(y[i:i+lahead])
+        
+    xs = np.array(xs)
+    ys = np.array(ys)
+    
+    nrows = xs.shape[0]
+    train_size = int(nrows * ratio)
+    # make sure the sizes are multiples of the batch size (needed for stateful lstm)
+    train_size -= train_size % batch_size
+    val_size = nrows - train_size
+    val_size -= val_size  % batch_size
+    total_size = train_size + val_size
+    xs = xs[:total_size]
+    ys = ys[:total_size]
+    
+    return xs[:train_size], ys[:train_size], xs[train_size:], ys[train_size:]
+
+
+def get_model_input_data(df):
+    """
+    Will return a dataframe and a normalized version of that dataframe
+
+    """
+    df = df.copy()
+    df = df.sort_index()
+    df = df._get_numeric_data.drop(['period'], axis=1, errors='ignore')
+    # maybe not necesarry, type of transform 
+    df[['volume', 'high_m_low', 'arb_signal']].apply(lambda x: yeojohnson(np.float64(x))[0]).rename(lambda x: x+'_johnson', axis=1)
+    df = df.filter(regex="(?!timestamp_.*)", axis=1) # filter out useless timestamp_ metrics
+    df = ta.add_all_ta_features(df, open="open", high="high", low="low", close="close", volume="volume").dropna(axis=1)
+    df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+    df = pd.concat([df, df_diff], axis=1)
+    dataset = normalize(df.values)
+    target = df.columns.get_loc('close') 
+    y = dataset[:, target]
+    return df, dataset

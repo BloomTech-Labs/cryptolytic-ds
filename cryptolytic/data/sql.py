@@ -139,7 +139,7 @@ def add_candle_data_to_table(df, cur):
     except Exception as e:
         print('ERROR', e)
     try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str + " except select * from candlesticks;")
+        cur.execute("INSERT INTO candlesticks VALUES" + args_str + " on conflict do nothing;")
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -194,8 +194,9 @@ def get_some_candles(info, n=10000, verbose=False):
     n = min(n, 50000)  # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
-
-    assert 'period' in info.keys()  # Require period information
+	
+    if 'period' not in info.keys():
+        info['period'] = 300
 
     # make sure dates are of right format
     if 'start' in info:

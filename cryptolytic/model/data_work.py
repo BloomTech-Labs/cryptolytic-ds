@@ -14,8 +14,7 @@ from cryptolytic.util import *
 import tensorflow as tf
 from tensorflow.keras.preprocessing import sequence
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Dense, Embedding, Conv1D, Activation,\
-    Add, Input, LSTM
+from tensorflow.keras.layers import Dense, Embedding, Conv1D, Activation, Add, Input, LSTM
 import tensorflow.keras.layers as layers
 import tensorflow.keras.losses as losses
 import tensorflow.keras.models as models
@@ -54,10 +53,14 @@ def denormalize(values, df, col=None):
     def eq(x, mu, std):
         return np.exp((x*std) + mu) - 1
 
+    print('tnh',)
+    print(np.ndim(values))
     if np.ndim(values) == 1 and col is not None:
         x, mu, std = thing(df[col])
+        print("Mu", mu,  "Std", std)
         return eq(values, mu, std)
     else:
+        print('tnhuu',)
         for i in range(values.shape[1]):
             x, mu, std = thing(df.iloc[:, i])
             if isinstance(values, pd.DataFrame):
