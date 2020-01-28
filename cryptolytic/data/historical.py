@@ -186,7 +186,7 @@ def get_time_interval(api, period):
 def conform_json_response(api, json_response):
     """Get the right data from the json response. Expects a list, either like [[],...], or like [{},..]"""
     if api=='cryptowatch':
-        return json_response['result'][str(period)]  # TODO fix
+        return list(json_response['result'].values())[0]
     elif api=='coincap':
         return json_response['data']
     elif api in {'poloniex', 'hitbtc', 'bitfinex', 'coinbase'}:
@@ -194,6 +194,11 @@ def conform_json_response(api, json_response):
     else:
         raise Exception('API not supported', api, 'Response was ', json_response)
     return None
+
+def lookup_apikey(api):
+    apikey = api_info[api].get('apikey')
+    if apikey is not None:
+        return os.environ.get(apikey)
 
 
 def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
@@ -203,10 +208,8 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
        start: start time in unix timestamp format
     """
 
-    apikey =  None
-    if api_info[api].get('apikey'):
-        apikey = os.environ.get(apikey)
-
+    # 
+    apikey = lookup_apikey(api)
 
     # Variable initialization
     pair_info = trading_pair_info(api, trading_pair)
@@ -302,13 +305,15 @@ def sample_every_pair(n=3000, query={}):
     return df
 
 
-# returns true if updated, or None if the task should be dropped
-def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retries=0):
+def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
+                num_retries=0):
+    """Returns true if updated, or None if the task should be dropped"""
+    # exit if num retries > 100
     if num_retries > 100:
         return
 
     # limit to 100 candles if limit is not specified
-    limit = api_info.get(api).get('limit') or 100 
+    limit = api_info.get(api).get('limit') or 100
     candle_info = None
 
     try:  # Get candle information
@@ -319,15 +324,14 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
                                    period=period,
                                    limit=limit)
     except Exception as e:
-        print('Test')
-        print(e)
+        print(f'Error encountered: {e}')
         logging.error(e)
 
     # If the last timestep is equal to the ending candle
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
-        print('Retry')
+        print(f'Retry {api} {exchange_id} {trading_pair} {timestamp} {num_retries}')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
     
     # Print the timestamp
@@ -339,39 +343,42 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300, num_retri
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
 
         sql.candlestick_to_sql(candle_info)
-        return True # ran without error
-    except Exception as e:
+        return True  # ran without error
+    except AssertionError as e:
         logging.error(e)
 
 
-def live_update(period = 300): # Period default is 5 minutes
+def live_update(period=300):  # Period default is 5 minutes
     """
-        Updates the database based on the info in data/api_info.json with new candlestick info,
-        grabbing data from the last timestamp until now, with the start date set at the start of 2019.
+        Updates the database based on the info in data/api_info.json with
+        new candlestick info, grabbing data from the last timestamp until now,
+        with the start date set at the start of 2019.
     """
     now = time.time()
 
-    # use a deque to rotate the tasks, and pop them when they are done. 
+    # use a deque to rotate the tasks, and pop them when they are done.
     # this is to avoid sending too many requests to one api at once.
     d = deque()
-    
+
     for api, exchange_id, trading_pair in yield_unique_pair():
         d.append([api, exchange_id, trading_pair])
-    
+
     for i in range(10_000):
-        if len(d)==0:
+        if len(d) == 0:
             break
+        time.sleep(1)
         api, exchange_id, trading_pair = d[-1]  # get the current task
+
         print(api, exchange_id, trading_pair)
 
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
-            
-        # already at the latest date, remove 
+
+        # already at the latest date, remove
         if start >= round(now)-period:
             d.pop() 
             continue
 
-        # returns true if updated, or None if the task should be dropped
+        # Returns true if updated, or None if the task should be dropped
         result = update_pair(api, exchange_id, trading_pair, start, period)
         if result is None:
             d.pop()
@@ -380,8 +387,9 @@ def live_update(period = 300): # Period default is 5 minutes
             d.rotate()
 
 
+
 def fill_missing_candles():
-    #missing = sql.get_missing_timesteps()
+    # missing = sql.get_missing_timesteps()
     missing = pd.DataFrame({'api': ['hitbtc'], 
                             'exchange': ['hitbtc'],
                             'period': [60],
@@ -389,41 +397,9 @@ def fill_missing_candles():
                             'timestamp': [1576235400],
                             'ntimestamp': [1576235520]})
     print(missing)
-#    for i, s in missing.iterrows():
-#        api, exchange, period, trading_pair, timestamp, ntimestamp = s
-#        print(int(timestamp))
-#        # first try to update with an api call
-#        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
-
-    # For those that are still missing, impute their value
-#    missing = sql.get_missing_timesteps()
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
-        candles = []
-        if api == 'coinbase': continue
-        last_timestep = 0
-        for ts in range(timestamp+int(period), ntimestamp, int(period)):
-            print("Imputing values for ", exchange, trading_pair, ts)
-            candle = sql.get_avg_candle({'timestamp': ts,
-                                         'trading_pair': trading_pair,
-                                         'period': period,
-                                         'exchange': exchange})
+        print(int(timestamp))
+        # first try to update with an api call
+        update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
-            last_timestep = candle['timestamp'] = ts
-            print(pd.to_numeric(candle['volume']))
-            candles.append(candle)
-            break
-
-
-        candle_info = dict(
-            api=api,
-            exchange=exchange,
-            candles=candles,
-            last_timestamp=last_timestep,
-            trading_pair=trading_pair,
-            candles_collected=len(candles),
-            period=period)  # period in seconds
-
-        print(candle_info)
- 
-        #sql.candlestick_to_sql(candle_info)
