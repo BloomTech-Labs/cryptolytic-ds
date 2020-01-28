@@ -121,7 +121,7 @@ def predictions():
 
 
 def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
-    epochs = 5
+    epochs = 10
     # batch size higher than 1 c  epochs = 10
     for i in range(epochs):
         model.fit(inputX,

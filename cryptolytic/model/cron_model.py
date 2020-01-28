@@ -22,7 +22,7 @@ def run_model():
     params = {'filters1': 32, 'noise1': 0.007044669933974564,
               'filtershape1': [48, 48, 96], 'filtershape2': [64, 64, 128]}
     history_size = 400
-    input_len = 16000
+    input_len = 32000
     lahead = 12*3
     step = 2
     period = 300
