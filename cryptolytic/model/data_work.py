@@ -43,7 +43,7 @@ def normalize(df):
     df = df.copy()
     x, mu, std = thing(df, axis=0)
     for i in range(df.shape[1]):
-        df[:, i] = (x[:, i] - mu[i]) / stf[i]
+        df[:, i] = (x[:, i] - mu[i]) / std[i]
     return df
 
 
@@ -67,7 +67,7 @@ def denormalize(values, df, col=None):
     return values
 
 
-def windowed(df, target, batch_size, history_size, step, lahead=1, ratio=0.8):
+def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.8):
     xs = []
     ys = []
 
@@ -75,7 +75,7 @@ def windowed(df, target, batch_size, history_size, step, lahead=1, ratio=0.8):
     y = dataset[:, target]
 
     start = history_size  # 1000
-    end = df.shape[0] - lahead  # 4990
+    end = dataset.shape[0] - lahead  # 4990
     # 4990 - 1000 = 3990
     for i in range(start, end):
         # grab rows from i, to i+history_size

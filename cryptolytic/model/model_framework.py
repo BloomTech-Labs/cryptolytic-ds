@@ -120,7 +120,7 @@ def predictions():
     return preds
 
 
-def fit_model(model, inputX, inputy):
+def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
     epochs = 5
     # batch size higher than 1 c  epochs = 10
     for i in range(epochs):
@@ -133,8 +133,8 @@ def fit_model(model, inputX, inputy):
                   shuffle=False,
                   workers=4,
                   validation_data=(x_val, y_val))
-        history['loss'].append(model.history.history['loss'])
-        history['val_loss'].append(model.history.history['val_loss'])
+        # history['loss'].append(model.history.history['loss'])
+        # history['val_loss'].append(model.history.history['val_loss'])
 #        model.reset_states()
     # pred = transformer.denormalize(model.predict(x_val)[:, 0], df, 'close')
     # pred_history.append(pred)
@@ -180,7 +180,7 @@ def fit_stacked_model(models, inputX, inputy):
     return model
 
 
-def create_model(x_train, params):
+def create_model(x_train, params, batch_size=200, lahead=12*3, ):
     attention_size = 5
     input_shape = x_train.shape[-2:]
     X_input = Input(input_shape, batch_size=batch_size)
@@ -189,17 +189,17 @@ def create_model(x_train, params):
 #    X = layers.TimeDistributed(Dense(input_shape[-1],
 #                               kernel_constraint=constraints.max_norm(1.0),
 #                               activation='tanh'))(X)
-    X = Conv1D(filters=params.filters1, kernel_size=6, strides=1, name='conv1',
+    X = Conv1D(filters=32, kernel_size=6, strides=1, name='conv1',
                kernel_initializer=glorot_uniform(seed=0))(X)
-    X = layers.GaussianNoise(params.noise1)(X)
+    X = layers.GaussianNoise(.005)(X)
     # X = layers.AveragePooling1D(2, strides=1)(X)
-    X = conv_block(X, f=3, filters=params.filtershape1, stage=2, block='a',
+    X = conv_block(X, f=3, filters=[48, 48, 96], stage=2, block='a',
                    strides=2)
-    X = layers.GaussianNoise(params.noise1)(X)
-    X = identity_block(X, f=3, filters=params.filtershape1, stage=2, block='b',
+    X = layers.GaussianNoise(.005)(X)
+    X = identity_block(X, f=3, filters=[48, 48, 96], stage=2, block='b',
                        strides=1)
-    X = layers.GaussianNoise(params.noise1)(X)
-    X = identity_block(X, f=3, filters=params.filtershape1, stage=2, block='c',
+    X = layers.GaussianNoise(.005)(X)
+    X = identity_block(X, f=3, filters=[48, 48, 96], stage=2, block='c',
                        strides=1)
 
     print(X.get_shape())

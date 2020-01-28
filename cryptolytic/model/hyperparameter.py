@@ -8,8 +8,16 @@ import scipy
 import scipy.stats
 # from scipy.stats import yeojohnson
 import os
-from cryptolytic.util import *
 from kerastuner.tuners import RandomSearch
+
+#internal imports
+import cryptolytic.data.historical as h
+import cryptolytic.model as m
+import cryptolytic.model.lstm_framework as lstm
+import cryptolytic.model.model_framework as mfw
+import cryptolytic.model.data_work as dw
+import cryptolytic.model.hyperparameter as hyper
+from cryptolytic.util import *
 
 # tensorflow import
 import tensorflow as tf
@@ -56,7 +64,7 @@ def endingly():
     return preds
 
 
-def hyperparameter(inputX, inputy):
+def hyperparameter(inputX, inputy, x_val, y_val):
     filtershape1 = 32 + 16 * np.random.randint(0, 6)
     filtershape2 = 32 + 16 * np.random.randint(0, 6)
 
@@ -67,16 +75,16 @@ def hyperparameter(inputX, inputy):
         filtershape2=[filtershape2, filtershape2, filtershape2*2]
     )
     print(params)
-    model = create_model(inputX, params)
-    fit_model(model, inputX, inputy)
-    save_model(model, 'filter', params=params)
+    model = mfw.create_model(inputX, params)
+    mfw.fit_model(model, inputX, inputy, x_val, y_val)
+    mfw.save_model(model, 'filter', params=params)
     return model
 
 
-def run_tuning():
+def run_tuning(x_train, y_train, x_val, y_val):
     models = []
     for i in range(50):
-        models.append(hyperparameter(x_train, y_train))
+        models.append(hyperparameter(x_train, y_train, x_val, y_val))
     return models
 
 
@@ -92,7 +100,7 @@ def random_keras_tuner(compiled_model, objective='val_accuracy', max_trials=5,
         objective=objective,
         max_trials=max_trials,
         executions_per_trial=executions_per_trial,
-        directory='cryptolytic-ds'
+        directory='cryptolytic-ds',
         project_name='cryptolytic'
     )
     tuner.results_summary()
