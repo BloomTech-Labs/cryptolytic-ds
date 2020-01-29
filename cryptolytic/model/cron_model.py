@@ -4,6 +4,7 @@ import cryptolytic.model.data_work as dw
 import cryptolytic.data.historical as h
 import cryptolytic.data as d
 import cryptolytic.model.model_framework as mfw
+import gc
 
 # tensorflow imports
 import tensorflow as tf
@@ -21,7 +22,8 @@ params = {
         'step': 1,
         'period': 300,
         'batch_size': 200,
-        'train_size': 10000
+        'train_size': 10000,
+        'ncandles': 5000
 }
 
 def run_model():
@@ -189,56 +191,89 @@ def cron_pred2():
     return all_preds
 
 
+
+
 def cron_train2():
     """
     - Loads model for the given unique trading pair, gets the latest data 
     availble for that trading pair complete with 
     """
     init()
+
+    now = int(time.time())
+    pull_size= 5000
+
     for api, exchange_id, trading_pair in h.yield_unique_pair():
-        model_path = mfw.get_model_path(api, exchange_id, trading_pair)
+        # Loop until training on all the data want to train on or
+        # if there is an error don't train
+        start = int(now - params['ncandles'] * params['period'])
+        time_counter = start
+        while True:
+            gc.collect()
+            model_path = mfw.get_model_path(api, exchange_id, trading_pair)
 
-        #model = tf.keras.load_model(path)
+            #model = tf.keras.load_model(path)
 
-        n = params['train_size']
+            n = params['train_size']
 
-        df, dataset = h.get_latest_data(api,
-                          exchange_id, trading_pair, 
-                          params['period'], 
-                          n=n)
+            # train in batches of 3000
+            df, dataset = h.get_data(api,
+                              exchange_id, trading_pair, 
+                              params['period'], 
+                              start=time_counter,
+                              n=3000)
 
-        if df is None:
-            continue
+            time_counter = int(df.timestamp[-1])
 
-        target = df.columns.get_loc('close')
+            # finished training for this 
+            if time_counter >= now - params['period']:
+                print('Finished training for  {api}, {exchange_id}, {trading_pair}')
+                break 
+            
+            if df is None:
+                break
 
-        print(n)
-        print(df.shape, dataset.shape)
+            if df.shape[0] < params['history_size']:
+                break
 
-        # Get the data in the same format that the model expects for its training
-        x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, 
-            target,
-            params['batch_size'], 
-            params['history_size'],
-            params['step'], 
-            lahead=params['lahead'],
-            ratio=0.8)
+            target = df.columns.get_loc('close')
 
-        print(x_train.shape)
-        print(y_train.shape)
-        print(x_val.shape)
-        print(y_val.shape)
-        if x_train.shape[0] < 10:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_train')
-            continue
+            print(n)
+            print(df.shape, dataset.shape)
+
+            # Get the data in the same format that the model expects for its training
+            x_train, y_train, x_val, y_val = dw.windowed(
+                dataset, 
+                target,
+                params['batch_size'], 
+                params['history_size'],
+                params['step'], 
+                lahead=params['lahead'],
+                ratio=0.8)
+
+            print(x_train.shape)
+            print(y_train.shape)
+            print(x_val.shape)
+            print(y_val.shape)
+            if x_train.shape[0] < 10:
+                print(f'Invalid shape {x_train.shape[0]} in function cron_train')
+                break
 
 
-        model = mfw.create_model(x_train, params)
+            # Create a model if not exists, else load model if it 
+            # not loaded
+            model = None
+            if not os.path.exists(model_path):
+                model = mfw.create_model(x_train, params)
+            elif model is None:
+                model = tf.keras.models.load_model(model_path)
+
+            # fit the model
+            model = mfw.fit_model(model, x_train, y_train, x_val, y_val)
+            print(f'Saved model {model_path}')
+            model.save(model_path)
 
 
-        print(x_train[0][0:5])
 
-        # fit the model
-        model = mfw.fit_model(model, x_train, y_train, x_val, y_val)
-        model.save(model_path)
+# be able to have model train on a large series of time without crashing
+# split data into smaller batches

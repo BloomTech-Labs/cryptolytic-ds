@@ -312,7 +312,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
                 num_retries=0):
     """Returns true if updated, or None if the task should be dropped"""
     # exit if num retries > 100
-    if num_retries > 100:
+    if num_retries > 20:
         return
 
     # limit to 100 candles if limit is not specified
@@ -391,14 +391,8 @@ def live_update(period=300):  # Period default is 5 minutes
 
 
 def fill_missing_candles():
-    # missing = sql.get_missing_timesteps()
-    missing = pd.DataFrame({'api': ['hitbtc'], 
-                            'exchange': ['hitbtc'],
-                            'period': [60],
-                            'trading_pair': ['eth_btc'],
-                            'timestamp': [1576235400],
-                            'ntimestamp': [1576235520]})
-    print(missing)
+    missing = sql.get_missing_timesteps()
+
     for i, s in missing.iterrows():
         api, exchange, period, trading_pair, timestamp, ntimestamp = s
         print(int(timestamp))
@@ -410,19 +404,23 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
     """
+
+    print(mapl(lambda x: type(x), [api, exchange_id, trading_pair, period, start, n]))
     df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
               'exchange_id': exchange_id}, n=n)
     df = df_orig
 
-    if df.shape[0] == 0:
+    # some times a small of candles will be returned and it won't work wi
+    if df.shape[0] < 1:
         return 
+
 
     df = df.sort_index()
     df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
     # filter out timestamp_ metrics
     df = df.filter(regex="(?!timestamp_.*)", axis=1)
     df = ta.add_all_ta_features(df, open="open", high="high", low="low",
-                                close="close", volume="volume").dropna(axis=1)
+                                close="close", volume="volume").fillna(axis=1, value=0)
     df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
     df = pd.concat([df, df_diff], axis=1)
     dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
@@ -436,7 +434,5 @@ def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
     """
     now = int(time.time())
     start = now - n*period
-
-    
 
     return get_data(api, exchange_id, trading_pair, period, start,  n=n)

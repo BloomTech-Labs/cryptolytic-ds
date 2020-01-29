@@ -14,7 +14,8 @@
 						"btc_usd",
 						"bat_btc",
 						"link_eth",
-						"bch_btc"
+						"bch_btc",
+						"eos_usd"
 				]
 		}
 	},
@@ -34,7 +35,8 @@
           "btc_usdt",
 		  "bat_btc",
 		  "link_eth",
-		  "bch_btc"
+		  "bch_btc",
+		  "eos_usdt"
         ]
       }
     },
@@ -69,7 +71,8 @@
         "trading_pairs": [
           "eth_btc",
           "btc_usd",
-		  "bat_btc"
+		  "bat_btc",
+		  "eos_usd"
         ]
       }
     },
@@ -105,7 +108,8 @@
           "eth_btc",
           "btc_usd",
 		  "bat_btc",
-		  "bch_btc"
+		  "bch_btc",
+		  "eos_usd"
         ]
       }
     },
@@ -151,7 +155,8 @@
           "eth_btc",
           "btc_usd",
 		  "link_eth",
-		  "bch_btc"
+		  "bch_btc",
+		  "eos_usd"
         ]
       }
     },
@@ -180,7 +185,8 @@
 				"trading_pairs":[
 		          "eth_btc",
 				  "btc_usdt",
-				  "bat_btc"
+				  "bat_btc",
+				  "eos_usdt"
 				]
 		}
    }

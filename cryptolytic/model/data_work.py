@@ -53,14 +53,11 @@ def denormalize(values, df, col=None):
     def eq(x, mu, std):
         return np.exp((x*std) + mu) - 1
 
-    print('tnh',)
-    print(np.ndim(values))
     if np.ndim(values) == 1 and col is not None:
         x, mu, std = thing(df[col])
         print("Mu", mu,  "Std", std)
         return eq(values, mu, std)
     else:
-        print('tnhuu',)
         for i in range(values.shape[1]):
             x, mu, std = thing(df.iloc[:, i])
             if isinstance(values, pd.DataFrame):
@@ -81,15 +78,13 @@ def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.
     end = dataset.shape[0] - lahead  # 4990
     # 4990 - 1000 = 3990
     for i in range(start, end):
-        # grab rows from i, to i+history_size
+        # grab rows from start y-history_size to  end 
         indices = range(i-history_size, i, step)
         xs.append(x[indices])
         ys.append(y[i:i+lahead])
 
     xs = np.array(xs)
     ys = np.array(ys)
-
-    print(dataset.shape)
 
     nrows = xs.shape[0]
     train_size = int(nrows * ratio)
@@ -104,39 +99,3 @@ def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.
 
     return xs[:train_size], ys[:train_size], xs[train_size:], ys[train_size:]
 
-
-# define function to load data for training and validation
-def data_load():
-    # load data
-    TRAIN_SPLIT = 3000
-    # dataset = normalize_df(df._get_numeric_data()).values
-    dataset = normalize_df(df._get_numeric_data()).values
-    target = df.columns.get_loc('close') - 1
-    y = dataset[:, target]
-    past_history = 720
-    future_target = 5
-    STEP = 3
-
-    x_train, y_train = multivariate_data(dataset, y, 0,
-                                         TRAIN_SPLIT, past_history,
-                                         future_target, STEP,
-                                         single_step=False)
-    x_val, y_val = multivariate_data(dataset, y,
-                                     TRAIN_SPLIT, None, past_history,
-                                     future_target, STEP,
-                                     single_step=False)
-    print('Single window of past history : {}'.format(x_train[0].shape))
-    print('\n Target temperature to predict : {}'.format(y_train[0].shape))
-    BUFFER_SIZE = 10_000
-    BATCH_SIZE = 256
-    train_data = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    train_data = train_data.cache().shuffle(BUFFER_SIZE).\
-        batch(BATCH_SIZE).repeat()
-
-    val_data = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-    val_data = val_data.batch(BATCH_SIZE).repeat()
-
-    '''
-    code for data loading here
-    '''
-    return train_data, val_data

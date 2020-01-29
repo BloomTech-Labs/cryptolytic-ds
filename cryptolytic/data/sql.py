@@ -181,6 +181,23 @@ def get_latest_date(exchange_id, trading_pair, period):
     return latest_date
 
 
+def get_earliest_date(exchange_id, trading_pair, period):
+    """
+        Return the earliest date for a given trading pair on a given exchange
+    """
+    q = """
+        SELECT timestamp FROM candlesticks
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
+        ORDER BY timestamp asc
+        LIMIT 1;
+    """
+    latest_date = safe_q1(q, {'exchange_id': exchange_id,
+        'trading_pair': trading_pair,
+        'period': period})
+    if latest_date is None:
+        print('No latest date')
+
+    return latest_date
 
 
 def get_some_candles(info, n=10000, verbose=False):
@@ -381,6 +398,4 @@ def get_arb_info(info, n=1000):
         df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
         return d.fix_df(df)
 
-def create_pred_table():
-    
-    pass
+
