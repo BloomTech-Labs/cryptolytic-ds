@@ -5,6 +5,9 @@ import requests
 from cryptolytic.util import date
 from cryptolytic.util import *
 from cryptolytic.data import sql
+import cryptolytic.model.data_work as dw
+import cryptolytic.data as d
+import ta
 import time
 import os
 import json
@@ -387,7 +390,6 @@ def live_update(period=300):  # Period default is 5 minutes
             d.rotate()
 
 
-
 def fill_missing_candles():
     # missing = sql.get_missing_timesteps()
     missing = pd.DataFrame({'api': ['hitbtc'], 
@@ -403,3 +405,38 @@ def fill_missing_candles():
         # first try to update with an api call
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
+
+def get_data(api, exchange_id, trading_pair, period, start, n=8000):
+    """
+    Get data for the given trading pair and perform feature engineering on that data
+    """
+    df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
+              'exchange_id': exchange_id}, n=n)
+    df = df_orig
+
+    if df.shape[0] == 0:
+        return 
+
+    df = df.sort_index()
+    df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
+    # filter out timestamp_ metrics
+    df = df.filter(regex="(?!timestamp_.*)", axis=1)
+    df = ta.add_all_ta_features(df, open="open", high="high", low="low",
+                                close="close", volume="volume").dropna(axis=1)
+    df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+    df = pd.concat([df, df_diff], axis=1)
+    dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
+
+    return df, dataset
+
+
+def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
+    """
+    Get data for the given trading pair and perform feature engineering on that data for the latest date
+    """
+    now = int(time.time())
+    start = now - n*period
+
+    
+
+    return get_data(api, exchange_id, trading_pair, period, start,  n=n)

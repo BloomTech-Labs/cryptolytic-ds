@@ -89,6 +89,8 @@ def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.
     xs = np.array(xs)
     ys = np.array(ys)
 
+    print(dataset.shape)
+
     nrows = xs.shape[0]
     train_size = int(nrows * ratio)
     # make sure the sizes are multiples of the batch size (needed for stateful

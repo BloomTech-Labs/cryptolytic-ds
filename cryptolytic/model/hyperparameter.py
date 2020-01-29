@@ -77,8 +77,8 @@ def hyperparameter(inputX, inputy, x_val, y_val):
     print(params)
     model = mfw.create_model(inputX, params)
     mfw.fit_model(model, inputX, inputy, x_val, y_val)
-    mfw.save_model(model, 'filter', params=params)
-    return model
+    # mfw.save_model(model, 'filter', params=params)
+    return model, params
 
 
 def run_tuning(x_train, y_train, x_val, y_val):
