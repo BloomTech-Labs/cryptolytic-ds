@@ -337,10 +337,11 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
-        if timestamp >= now - 86400  # seconds in a day
+        if timestamp >= now - 86400:  # seconds in a day
+            return
         print(f'Retry {api} {exchange_id} {trading_pair} {timestamp} {num_retries}')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
-    
+
     # Print the timestamp
     ts = candle_info['last_timestamp']
     print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
