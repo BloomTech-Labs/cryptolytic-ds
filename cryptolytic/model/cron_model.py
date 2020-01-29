@@ -180,7 +180,7 @@ def cron_pred2():
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
 
-        
+
         preds = model.predict(x_train)[:, 0][-params['lahead']]
 
         last_timestamp = df.timestamp[-1]
@@ -191,17 +191,17 @@ def cron_pred2():
     return all_preds
 
 
-
-
 def cron_train2():
     """
     - Loads model for the given unique trading pair, gets the latest data 
-    availble for that trading pair complete with 
+    availble for that trading pair complete with
     """
     init()
 
     now = int(time.time())
-    pull_size= 5000
+    pull_size = 5000
+
+    h.live_update()
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         # Loop until training on all the data want to train on or
@@ -212,25 +212,35 @@ def cron_train2():
             gc.collect()
             model_path = mfw.get_model_path(exchange_id, trading_pair)
 
-            #model = tf.keras.load_model(path)
+            # model = tf.keras.load_model(path)
 
             n = params['train_size']
 
             # train in batches of 3000
+<<<<<<< HEAD
             df, dataset = h.get_data(
                               exchange_id, trading_pair, 
                               params['period'], 
                               start=time_counter,
                               n=3000)
+=======
+            df, dataset = h.get_data(api,
+                                     exchange_id, trading_pair,
+                                     params['period'],
+                                     start=time_counter,
+                                     n=3000)
+
+            if df is None:
+                break
+
+            print(df)
+>>>>>>> aa74844f49cfb50b4771d35efeb1359cc27e1c54
 
             time_counter = int(df.timestamp[-1])
 
-            # finished training for this 
+            # finished training for this
             if time_counter >= now - params['period']:
                 print('Finished training for  {api}, {exchange_id}, {trading_pair}')
-                break 
-            
-            if df is None:
                 break
 
             if df.shape[0] < params['history_size']:
@@ -259,8 +269,7 @@ def cron_train2():
                 print(f'Invalid shape {x_train.shape[0]} in function cron_train')
                 break
 
-
-            # Create a model if not exists, else load model if it 
+            # Create a model if not exists, else load model if it
             # not loaded
             model = None
             if not os.path.exists(model_path):
@@ -272,8 +281,6 @@ def cron_train2():
             model = mfw.fit_model(model, x_train, y_train, x_val, y_val)
             print(f'Saved model {model_path}')
             model.save(model_path)
-
-
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches

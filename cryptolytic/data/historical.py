@@ -321,6 +321,9 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     if num_retries > 20:
         return
 
+    now = time.time()
+    now = int(now)
+
     # limit to 100 candles if limit is not specified
     limit = api_info.get(api).get('limit') or 100
     candle_info = None
@@ -340,9 +343,11 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
+        if timestamp >= now - 86400:  # seconds in a day
+            return
         print(f'Retry {api} {exchange_id} {trading_pair} {timestamp} {num_retries}')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
-    
+
     # Print the timestamp
     ts = candle_info['last_timestamp']
     print(datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
@@ -364,6 +369,7 @@ def live_update(period=300):  # Period default is 5 minutes
         with the start date set at the start of 2019.
     """
     now = time.time()
+    now = int(now)
 
     # use a deque to rotate the tasks, and pop them when they are done.
     # this is to avoid sending too many requests to one api at once.
@@ -375,16 +381,15 @@ def live_update(period=300):  # Period default is 5 minutes
     for i in range(10_000):
         if len(d) == 0:
             break
-        time.sleep(1)
         api, exchange_id, trading_pair = d[-1]  # get the current task
 
         print(api, exchange_id, trading_pair)
 
-        start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
+        start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800 # timestamp is January 1st 2019
 
         # already at the latest date, remove
-        if start >= round(now)-period:
-            d.pop() 
+        if start >= now-86400:
+            d.pop()
             continue
 
         # Returns true if updated, or None if the task should be dropped
@@ -416,10 +421,11 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
               'exchange_id': exchange_id}, n=n)
     df = df_orig
 
-    # some times a small of candles will be returned and it won't work wi
-    if df.shape[0] < 1:
-        return 
+    # # some times a small of candles will be returned and it won't work wi
+    # if df.shape[0] < 1:
+    #     return
 
+<<<<<<< HEAD
     def price_increase(x):
         if x > 0.007:
             return 1
@@ -443,6 +449,24 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
     dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
     return df, dataset
+=======
+    try:
+        df = df.sort_index()
+        df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
+        # filter out timestamp_ metrics
+        df = df.filter(regex="(?!timestamp_.*)", axis=1)
+        df = ta.add_all_ta_features(df, open="open", high="high", low="low",
+                                    close="close", volume="volume").fillna(axis=1, value=0)
+        df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+        df = pd.concat([df, df_diff], axis=1)
+        dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
+
+        return df, dataset
+    except Exception as e:
+        # Returns None None for tuple unpacking convineance
+        return None, None
+        print('Warning: Error in get_data: {e}')
+>>>>>>> aa74844f49cfb50b4771d35efeb1359cc27e1c54
 
 
 def get_latest_data(exchange_id, trading_pair, period, n=8000):
