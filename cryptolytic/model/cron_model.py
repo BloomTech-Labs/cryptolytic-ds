@@ -226,6 +226,8 @@ def cron_train2():
             if df is None:
                 break
 
+            print(df)
+
             time_counter = int(df.timestamp[-1])
 
             # finished training for this

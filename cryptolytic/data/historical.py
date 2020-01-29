@@ -315,7 +315,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     if num_retries > 20:
         return
 
-    now = time.time
+    now = time.time()
     now = int(now)
 
     # limit to 100 candles if limit is not specified
@@ -415,9 +415,9 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
               'exchange_id': exchange_id}, n=n)
     df = df_orig
 
-    # some times a small of candles will be returned and it won't work wi
-    if df.shape[0] < 1:
-        return 
+    # # some times a small of candles will be returned and it won't work wi
+    # if df.shape[0] < 1:
+    #     return
 
     try:
         df = df.sort_index()
@@ -432,6 +432,8 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
 
         return df, dataset
     except Exception as e:
+        # Returns None None for tuple unpacking convineance
+        return None, None
         print('Warning: Error in get_data: {e}')
 
 
