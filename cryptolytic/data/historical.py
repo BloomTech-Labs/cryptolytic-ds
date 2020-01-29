@@ -315,6 +315,9 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     if num_retries > 20:
         return
 
+    now = time.time
+    now = int(now)
+
     # limit to 100 candles if limit is not specified
     limit = api_info.get(api).get('limit') or 100
     candle_info = None
@@ -334,6 +337,7 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
+        if timestamp >= now - 86400  # seconds in a day
         print(f'Retry {api} {exchange_id} {trading_pair} {timestamp} {num_retries}')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
     
@@ -358,6 +362,7 @@ def live_update(period=300):  # Period default is 5 minutes
         with the start date set at the start of 2019.
     """
     now = time.time()
+    now = int(now)
 
     # use a deque to rotate the tasks, and pop them when they are done.
     # this is to avoid sending too many requests to one api at once.
@@ -369,16 +374,15 @@ def live_update(period=300):  # Period default is 5 minutes
     for i in range(10_000):
         if len(d) == 0:
             break
-        time.sleep(1)
         api, exchange_id, trading_pair = d[-1]  # get the current task
 
         print(api, exchange_id, trading_pair)
 
-        start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800  # timestamp is January 1st 2019
+        start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800 # timestamp is January 1st 2019
 
         # already at the latest date, remove
-        if start >= round(now)-period:
-            d.pop() 
+        if start >= now-86400:
+            d.pop()
             continue
 
         # Returns true if updated, or None if the task should be dropped
