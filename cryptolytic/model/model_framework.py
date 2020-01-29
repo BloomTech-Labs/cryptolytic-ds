@@ -142,19 +142,8 @@ def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
     return model
 
 
-def save_model(model, folder, params=None):
-    path = f'models/{folder}'
-    if not os.path.exists(path):
-        os.mkdir(path)
-    filename = os.path.join(path, 'model_' + str(np.random.rand()) + '.h5')
-    if os.path.exists(filename):
-        return save_model(model)
-    if params is not None:
-        param_path = os.path.join(path, 'model_params.csv')
-        pd.DataFrame(params).to_csv(param_path)
-
-    model.save(filename)
-    print('Saved model')
+def get_model_path(api, exchange_id, trading_pair):
+    return f'models/model_{api}_{exchange_id}_{trading_pair}.h5'
 
 
 def load_all_models(folder):
@@ -172,16 +161,9 @@ def load_all_models(folder):
     return models, params
 
 
-def fit_stacked_model(models, inputX, inputy):
-    stackedX = stacked_dataset(models, inputX)
-    # fit model
-    model = create_model(inputX)
-    fit_model(model, inputX, inputy)
-    return model
-
-
-def create_model(x_train, batch_size, lahead):
-    attention_size = 5
+def create_model(x_train, params):
+    batch_size = params['batch_size']
+    lahead = params['lahead']
     input_shape = x_train.shape[-2:]
     X_input = Input(input_shape, batch_size=batch_size)
     X = X_input

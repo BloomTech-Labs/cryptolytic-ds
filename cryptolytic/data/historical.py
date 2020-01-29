@@ -390,7 +390,6 @@ def live_update(period=300):  # Period default is 5 minutes
             d.rotate()
 
 
-
 def fill_missing_candles():
     # missing = sql.get_missing_timesteps()
     missing = pd.DataFrame({'api': ['hitbtc'], 
@@ -406,7 +405,8 @@ def fill_missing_candles():
         # first try to update with an api call
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
-def get_data(api, exchange_id, trading_pair, period, start n=8000):
+
+def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
     """
@@ -426,6 +426,7 @@ def get_data(api, exchange_id, trading_pair, period, start n=8000):
     dataset = dw.normalize(df.values)
 
     return df, dataset
+
 
 def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
     """
