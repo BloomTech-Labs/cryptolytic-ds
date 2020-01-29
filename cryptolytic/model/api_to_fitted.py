@@ -72,7 +72,7 @@ def cron_train(api, exchange_id, traiding_pair):
 
     # Create the windowed x and y train and test sets
     x_train, y_train, x_val, y_val = dw.windowed(
-        dataset, target, batch_size, history_size, step, lahead
+        dataset, target_column, batch_size, history_size, step, lahead
     )
 
     # Create a hyperparameter tunned model
