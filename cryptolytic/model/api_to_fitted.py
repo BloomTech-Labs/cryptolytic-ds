@@ -15,9 +15,10 @@ import cryptolytic.model.hyperparameter as hyper
 # external imports
 import ta
 import os
+import time
 
 
-def cron_train(api, exchange_id, traiding_pair):
+def cron_train(api, exchange_id, trading_pair):
     '''
     Funciton is created to allow for the creation of new/updated models by
     providing api call information.
