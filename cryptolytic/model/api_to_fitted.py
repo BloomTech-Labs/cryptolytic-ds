@@ -16,6 +16,7 @@ import cryptolytic.model.hyperparameter as hyper
 import ta
 import os
 import time
+import pandas as pd
 
 
 def cron_train(api, exchange_id, trading_pair):
@@ -44,7 +45,7 @@ def cron_train(api, exchange_id, trading_pair):
 
     # grab data from the database
     df_original = d.get_df(
-        {'start': start_time, 'period': period, 'trading_pair': traiding_pair,
+        {'start': start_time, 'period': period, 'trading_pair': trading_pair,
          'exchange_id': exchange_id},
         n=input_len
     )
@@ -54,7 +55,7 @@ def cron_train(api, exchange_id, trading_pair):
     df = df.sort_index()
     # Make sure the data frame is numeric data only.
     # 'period' column is dropped as all values of 'period' should be the same
-    df = df.__get_numeric_data().drop(['period'], axis=1, errors='ignore')
+    df = df._get_numeric_data().drop(['period'], axis=1, errors='ignore')
     # Filter out the 'timestamp_* metrics
     df = df.filter(regex='(?!timestamp_.*)', axis=1)
     # Create signals from data using the Technical Analysis library

@@ -180,7 +180,7 @@ def cron_pred2():
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
 
-        
+
         preds = model.predict(x_train)[:, 0][-params['lahead']]
 
         last_timestamp = df.timestamp[-1]
@@ -212,7 +212,7 @@ def cron_train2():
             gc.collect()
             model_path = mfw.get_model_path(api, exchange_id, trading_pair)
 
-            #model = tf.keras.load_model(path)
+            # model = tf.keras.load_model(path)
 
             n = params['train_size']
 

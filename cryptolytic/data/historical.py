@@ -414,18 +414,20 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     if df.shape[0] < 1:
         return 
 
+    try:
+        df = df.sort_index()
+        df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
+        # filter out timestamp_ metrics
+        df = df.filter(regex="(?!timestamp_.*)", axis=1)
+        df = ta.add_all_ta_features(df, open="open", high="high", low="low",
+                                    close="close", volume="volume").fillna(axis=1, value=0)
+        df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+        df = pd.concat([df, df_diff], axis=1)
+        dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
-    df = df.sort_index()
-    df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
-    # filter out timestamp_ metrics
-    df = df.filter(regex="(?!timestamp_.*)", axis=1)
-    df = ta.add_all_ta_features(df, open="open", high="high", low="low",
-                                close="close", volume="volume").fillna(axis=1, value=0)
-    df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
-    df = pd.concat([df, df_diff], axis=1)
-    dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
-
-    return df, dataset
+        return df, dataset
+    except Exception as e:
+        print('Warning: Error in get_data: {e}')
 
 
 def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
