@@ -142,17 +142,17 @@ def cron_pred2():
     init()
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
-    for api, exchange_id, trading_pair in h.yield_unique_pair():
-        model_path = mfw.get_model_path(api, exchange_id, trading_pair)
+    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        model_path = mfw.get_model_path(exchange_id, trading_pair)
         if not os.path.exists(model_path):
-            print(f'Model not available for {api}, {exchange_id}, {trading_pair}') 
+            print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
 
         model = tf.keras.models.load_model(model_path)
 
         n = params['history_size']+params['lahead']
 
-        df, dataset = h.get_latest_data(api,
+        df, dataset = h.get_latest_data(
                           exchange_id, trading_pair, 
                           params['period'], 
                           # Pull history_size + lahead length, shouldn't need more to make a 
@@ -203,21 +203,21 @@ def cron_train2():
     now = int(time.time())
     pull_size= 5000
 
-    for api, exchange_id, trading_pair in h.yield_unique_pair():
+    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         # Loop until training on all the data want to train on or
         # if there is an error don't train
         start = int(now - params['ncandles'] * params['period'])
         time_counter = start
         while True:
             gc.collect()
-            model_path = mfw.get_model_path(api, exchange_id, trading_pair)
+            model_path = mfw.get_model_path(exchange_id, trading_pair)
 
             #model = tf.keras.load_model(path)
 
             n = params['train_size']
 
             # train in batches of 3000
-            df, dataset = h.get_data(api,
+            df, dataset = h.get_data(
                               exchange_id, trading_pair, 
                               params['period'], 
                               start=time_counter,

@@ -272,14 +272,20 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
         period=period)  # period in seconds
 
 
-def yield_unique_pair():
+def yield_unique_pair(return_api=True):
     """Yield unique trading pair (not including period information)"""
     api_iter = api_info.items()
+    pairs = []
     for api, api_data in api_iter:
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
-                yield (api, exchange_id, trading_pair)
+                if return_api == True:
+                    pairs.append((api, exchange_id, trading_pair))
+                else:
+                    pairs.append((exchange_id, trading_pair))
+
+    return pairs
 
 
 def sample_every_pair(n=3000, query={}):
@@ -400,7 +406,7 @@ def fill_missing_candles():
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
 
-def get_data(api, exchange_id, trading_pair, period, start, n=8000):
+def get_data(exchange_id, trading_pair, period, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
     """
@@ -414,6 +420,11 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     if df.shape[0] < 1:
         return 
 
+    def price_increase(x):
+        if x > 0.007:
+            return 1
+        return 0
+
 
     df = df.sort_index()
     df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
@@ -423,16 +434,22 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
                                 close="close", volume="volume").fillna(axis=1, value=0)
     df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
     df = pd.concat([df, df_diff], axis=1)
+    df['diff_percent'] = (df_diff['close'] - df['close']) / ((df['close'] + (df_diff['close'])/2)
+    df['price_increased'] = df['diff_percent'].apply(price_increase)
+    # 50, 100 
+    # 1 - 100 / 50
+    # .25
+
     dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
     return df, dataset
 
 
-def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
+def get_latest_data(exchange_id, trading_pair, period, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data for the latest date
     """
     now = int(time.time())
     start = now - n*period
 
-    return get_data(api, exchange_id, trading_pair, period, start,  n=n)
+    return get_data(exchange_id, trading_pair, period, start,  n=n)
