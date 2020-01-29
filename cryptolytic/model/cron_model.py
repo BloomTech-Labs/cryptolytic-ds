@@ -138,14 +138,15 @@ def cron_pred2():
     availble for that trading pair complete with 
     """
     init()
-    all_preds = pd.DataFrame(columns=['api', 'tradign_pair', 'exchange_id', 'timestamp'])
+    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+
     for api, exchange_id, trading_pair in h.yield_unique_pair():
         model_path = mfw.get_model_path(api, exchange_id, trading_pair)
         if not os.path.exists(model_path):
             print(f'Model not available for {api}, {exchange_id}, {trading_pair}') 
             continue
 
-        model = tf.keras.load_model(path)
+        model = tf.keras.models.load_model(model_path)
 
         n = params['history_size']+params['lahead']
 
@@ -156,7 +157,12 @@ def cron_pred2():
                           # prediction
                           n=n)
 
+        if df is None:
+            continue
+
         target = df.columns.get_loc('close')
+
+        print(dataset.shape)
 
         # Get the data in the same format that the model expects for its training
         x_train, y_train, x_val, y_val = dw.windowed(
@@ -167,15 +173,20 @@ def cron_pred2():
             lahead=0, # Zero look ahead, don't truncate any data for the prediction
             ratio=1.0)
 
+
         if x_train.shape[0] < n:
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
-        
-        preds = model.predict(x_train)
-        print(preds.shape)
-#        preds = pd.DataFrame({'close' : preds, )
- #       all_preds = pd.concat([all_preds, ]
 
+        
+        preds = model.predict(x_train)[:, 0][-params['lahead']]
+
+        last_timestamp = df.timestamp[-1]
+        timestamps = [last_timestamp + period * i for i in range(len(preds))]
+        yo = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
+        all_preds = pd.concat([all_preds, yo], axis=1)
+
+    return all_preds
 
 
 def cron_train2():
@@ -184,7 +195,6 @@ def cron_train2():
     availble for that trading pair complete with 
     """
     init()
-    all_preds = []
     for api, exchange_id, trading_pair in h.yield_unique_pair():
         model_path = mfw.get_model_path(api, exchange_id, trading_pair)
 
@@ -195,27 +205,39 @@ def cron_train2():
         df, dataset = h.get_latest_data(api,
                           exchange_id, trading_pair, 
                           params['period'], 
-                          # Pull history_size + lahead length, shouldn't need more to make a 
-                          # prediction
                           n=n)
+
+        if df is None:
+            continue
 
         target = df.columns.get_loc('close')
 
+        print(n)
+        print(df.shape, dataset.shape)
+
         # Get the data in the same format that the model expects for its training
         x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, target,
+            dataset, 
+            target,
             params['batch_size'], 
             params['history_size'],
             params['step'], 
             lahead=params['lahead'],
             ratio=0.8)
 
-        if x_train.shape[0] < n:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
+        print(x_train.shape)
+        print(y_train.shape)
+        print(x_val.shape)
+        print(y_val.shape)
+        if x_train.shape[0] < 10:
+            print(f'Invalid shape {x_train.shape[0]} in function cron_train')
             continue
 
 
-        model = mfw.create_model(x_train, params, params['batch_size'], params['lahead'])
+        model = mfw.create_model(x_train, params)
+
+
+        print(x_train[0][0:5])
 
         # fit the model
         model = mfw.fit_model(model, x_train, y_train, x_val, y_val)

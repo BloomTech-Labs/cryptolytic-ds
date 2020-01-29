@@ -381,3 +381,6 @@ def get_arb_info(info, n=1000):
         df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
         return d.fix_df(df)
 
+def create_pred_table():
+    
+    pass

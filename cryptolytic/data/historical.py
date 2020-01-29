@@ -411,8 +411,11 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     Get data for the given trading pair and perform feature engineering on that data
     """
     df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
-              'exchange_id': exchange_id})
+              'exchange_id': exchange_id}, n=n)
     df = df_orig
+
+    if df.shape[0] == 0:
+        return 
 
     df = df.sort_index()
     df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
@@ -420,10 +423,9 @@ def get_data(api, exchange_id, trading_pair, period, start, n=8000):
     df = df.filter(regex="(?!timestamp_.*)", axis=1)
     df = ta.add_all_ta_features(df, open="open", high="high", low="low",
                                 close="close", volume="volume").dropna(axis=1)
-    df_diff = (df - df.shift(1, fill_value=0)).\
-        rename(lambda x: x+'_diff', axis=1)
+    df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
     df = pd.concat([df, df_diff], axis=1)
-    dataset = dw.normalize(df.values)
+    dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
     return df, dataset
 
@@ -434,4 +436,7 @@ def get_latest_data(api, exchange_id, trading_pair, period, n=8000):
     """
     now = int(time.time())
     start = now - n*period
-    return get_data(api, exchange_id, trading_pair, period, start,  n=8000)
+
+    
+
+    return get_data(api, exchange_id, trading_pair, period, start,  n=n)
