@@ -416,7 +416,7 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
     Get data for the given trading pair and perform feature engineering on that data
     """
 
-    print(mapl(lambda x: type(x), [api, exchange_id, trading_pair, period, start, n]))
+    print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
     df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
               'exchange_id': exchange_id}, n=n)
     df = df_orig
@@ -430,24 +430,25 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
             return 1
         return 0
 
+    try:
+        df = df.sort_index()
+        df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
+        # filter out timestamp_ metrics
+        df = df.filter(regex="(?!timestamp_.*)", axis=1)
+        df = ta.add_all_ta_features(df, open="open", high="high", low="low",
+                                    close="close", volume="volume").fillna(axis=1, value=0)
+        df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+        df = pd.concat([df, df_diff], axis=1)
+        df['diff_percent'] = (df_diff['close'] - df['close']) / (df['close'] + (df_diff['close'])/2)
+        df['price_increased'] = df['diff_percent'].apply(price_increase)
+        # 50, 100 
+        # 1 - 100 / 50
+        # .25
 
-    df = df.sort_index()
-    df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
-    # filter out timestamp_ metrics
-    df = df.filter(regex="(?!timestamp_.*)", axis=1)
-    df = ta.add_all_ta_features(df, open="open", high="high", low="low",
-                                close="close", volume="volume").fillna(axis=1, value=0)
-    df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
-    df = pd.concat([df, df_diff], axis=1)
-    df['diff_percent'] = (df_diff['close'] - df['close']) / ((df['close'] + (df_diff['close'])/2)
-    df['price_increased'] = df['diff_percent'].apply(price_increase)
-    # 50, 100 
-    # 1 - 100 / 50
-    # .25
+        dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
-    dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
+        return df, dataset
 
-    return df, dataset
     except Exception as e:
         # Returns None None for tuple unpacking convineance
         return None, None
