@@ -26,9 +26,6 @@ def cron_train(api, exchange_id, traiding_pair):
     # initialize the enviornment
     init()
 
-    # use default params
-    params = {'filters1': 32, 'noise1': 0.007044669933974564,
-              'filtershape1': [48, 48, 96], 'filtershape2': [64, 64, 128]}
     # get current time
     now = time.time()
     now = int(now)
@@ -83,7 +80,7 @@ def cron_train(api, exchange_id, traiding_pair):
     hyper.hyperparameter requires x and y train and val data and automatically
     performs hyperparameter tuning, model creation, and model saving
     '''
-    hyper_model = hyper.hyperparameter(x_train, y_train, x_val, y_val)
+    hyper_model, params = hyper.hyperparameter(x_train, y_train, x_val, y_val)
 
     # Save the model to the folder
     path = 'models/models/'
