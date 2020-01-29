@@ -15,9 +15,10 @@ import cryptolytic.model.hyperparameter as hyper
 # external imports
 import ta
 import os
+import time
 
 
-def cron_train(api, exchange_id, traiding_pair):
+def cron_train(api, exchange_id, trading_pair):
     '''
     Funciton is created to allow for the creation of new/updated models by
     providing api call information.
@@ -43,7 +44,7 @@ def cron_train(api, exchange_id, traiding_pair):
 
     # grab data from the database
     df_original = d.get_df(
-        {'start': start_time, 'period': period, 'trading_pair': traiding_pair,
+        {'start': start_time, 'period': period, 'trading_pair': trading_pair,
          'exchange_id': exchange_id},
         n=input_len
     )
@@ -53,14 +54,13 @@ def cron_train(api, exchange_id, traiding_pair):
     df = df.sort_index()
     # Make sure the data frame is numeric data only.
     # 'period' column is dropped as all values of 'period' should be the same
-    df = df.__get_numeric_data().drop(['period'], axis=1, errors='ignore')
+    df = df._get_numeric_data().drop(['period'], axis=1, errors='ignore')
     # Filter out the 'timestamp_* metrics
     df = df.filter(regex='(?!timestamp_.*)', axis=1)
     # Create signals from data using the Technical Analysis library
     df = ta.add_all_ta_features(
         df, open='open', high='high', low='low', close='close', volume='volume'
         ).dropna(axis=1)
-    #
     df_diff = (df - df.shift(1, fill_value=0)).\
         rename(lambda x: x+'_diff', axis=1)
     # concatinate df_diff into the primary dataframe (df)
@@ -78,9 +78,9 @@ def cron_train(api, exchange_id, traiding_pair):
     # Create a hyperparameter tunned model
     '''
     hyper.hyperparameter requires x and y train and val data and automatically
-    performs hyperparameter tuning, model creation, and model saving
+    performs model creation and fitting
     '''
-    hyper_model, params = hyper.hyperparameter(x_train, y_train, x_val, y_val)
+    model, params = hyper.hyperparameter(x_train, y_train, x_val, y_val)
 
     # Save the model to the folder
     path = 'models/models/'
@@ -90,7 +90,7 @@ def cron_train(api, exchange_id, traiding_pair):
     model.save(filename)
     # Save the parameters to the folder
     param_path = os.path.join(
-        path, f'model_{api}_{exchange_id}_{trading_pair}', '_params.csv'
+        path, f'model_{api}_{exchange_id}_{trading_pair}_params.csv'
         )
     pd.DataFrame(params).to_csv(param_path)
 
