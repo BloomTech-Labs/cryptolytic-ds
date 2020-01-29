@@ -21,7 +21,7 @@ def trade_model(df):
     # check that the data is valid (no empty or small dataframes)
     # train test split 
 
-    train_size = int(train.shape[0] * 0.8)
+    train_size = int(df.shape[0] * 0.8)
     train = df.iloc[0:train_size]
     test = df.iloc[train_size:]
 
@@ -56,9 +56,10 @@ def test_trade_model():
     exchange_id = 'hitbtc'
     trading_pair = 'eos_usd'
     period = 300
-    start = '2019-01-30'
+    start = '03-01-2019'
     
-    df = h.get_data(exchange_id, trading_pair, period, start, n=8000)
+    df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=8000)
+    print(df)
     preds, score = trade_model(df)
 
     print(score)
