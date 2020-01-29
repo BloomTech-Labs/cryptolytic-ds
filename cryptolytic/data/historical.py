@@ -425,8 +425,8 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
     # if df.shape[0] < 1:
     #     return
 
-    def price_increase(x):
-        if x > 0.007:
+    def price_increase(percent_diff, top5percent):
+        if percent_diff > top5percent:
             return 1
         return 0
 
@@ -437,13 +437,17 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         df = df.filter(regex="(?!timestamp_.*)", axis=1)
         df = ta.add_all_ta_features(df, open="open", high="high", low="low",
                                     close="close", volume="volume").fillna(axis=1, value=0)
-        df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
+        df_shifted = df.shift(1,fill_value=0)
+        df_diff = (df - df_shifted).rename(lambda x: x+'_diff', axis=1)
         df = pd.concat([df, df_diff], axis=1)
-        df['diff_percent'] = (df_diff['close'] - df['close']) / (df['close'] + (df_diff['close'])/2)
-        df['price_increased'] = df['diff_percent'].apply(price_increase)
+        df['diff_percent'] = df['close'].pct_change(12).fillna(0)
+        print("oeu", df)
+        df['price_increased'] = df['diff_percent'].apply(lambda x: price_increase(x, df['diff_percent'].quantile(0.95)))
+        print("oeu", df)
         # 50, 100 
         # 1 - 100 / 50
         # .25
+
 
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
@@ -451,8 +455,8 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
 
     except Exception as e:
         # Returns None None for tuple unpacking convineance
-        return None, None
         print(f'Warning: Error in get_data: {e}')
+        return None, None
 
 
 def get_latest_data(exchange_id, trading_pair, period, n=8000):
