@@ -425,7 +425,6 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
     # if df.shape[0] < 1:
     #     return
 
-<<<<<<< HEAD
     def price_increase(x):
         if x > 0.007:
             return 1
@@ -449,24 +448,10 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
     dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
     return df, dataset
-=======
-    try:
-        df = df.sort_index()
-        df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
-        # filter out timestamp_ metrics
-        df = df.filter(regex="(?!timestamp_.*)", axis=1)
-        df = ta.add_all_ta_features(df, open="open", high="high", low="low",
-                                    close="close", volume="volume").fillna(axis=1, value=0)
-        df_diff = (df - df.shift(1, fill_value=0)).rename(lambda x: x+'_diff', axis=1)
-        df = pd.concat([df, df_diff], axis=1)
-        dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
-
-        return df, dataset
     except Exception as e:
         # Returns None None for tuple unpacking convineance
         return None, None
-        print('Warning: Error in get_data: {e}')
->>>>>>> aa74844f49cfb50b4771d35efeb1359cc27e1c54
+        print(f'Warning: Error in get_data: {e}')
 
 
 def get_latest_data(exchange_id, trading_pair, period, n=8000):

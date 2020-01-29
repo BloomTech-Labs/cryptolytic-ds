@@ -217,24 +217,17 @@ def cron_train2():
             n = params['train_size']
 
             # train in batches of 3000
-<<<<<<< HEAD
+
             df, dataset = h.get_data(
                               exchange_id, trading_pair, 
                               params['period'], 
                               start=time_counter,
                               n=3000)
-=======
-            df, dataset = h.get_data(api,
-                                     exchange_id, trading_pair,
-                                     params['period'],
-                                     start=time_counter,
-                                     n=3000)
 
             if df is None:
                 break
 
             print(df)
->>>>>>> aa74844f49cfb50b4771d35efeb1359cc27e1c54
 
             time_counter = int(df.timestamp[-1])
 
