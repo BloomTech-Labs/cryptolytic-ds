@@ -199,7 +199,7 @@ def xgb_cron_train(model_type):
     pull_size = 5000
 
     # Check for missing data, pull data from APIs if data is missing
-    h.live_update()
+    # h.live_update()
 
     # Check for every unqiue trading pair in each exchange
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
@@ -209,7 +209,7 @@ def xgb_cron_train(model_type):
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_path('neural', model_type, exchange_id, trading_pair, '.pkl')
+        model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.pkl')
 
         n = params['train_size']
 
@@ -237,7 +237,9 @@ def xgb_cron_train(model_type):
         # Create a model if not exists, else load model if it
         # not loaded
         model = None
-        if not os.path.exists(model_path):
+        # TODO remove comment on below to restory functionality beyond testing enviornments
+        # if not os.path.exists(model_path):
+        if True:
             if model_type == 'trade':
                 model = xgmod.create_model()
 
@@ -249,8 +251,8 @@ def xgb_cron_train(model_type):
         # fit the model
         model = xgmod.fit_model(model, x_train, y_train)
         print(f'Saved model {model_path}')
-#        model.save(model_path)
-        pickle.dump(model, open(model_path), 'wb')
+        # model.save(model_path)
+        pickle.dump(model, open(model_path, 'wb'))
         # Upload file to s3
         aws.upload_file(model_path)
 
