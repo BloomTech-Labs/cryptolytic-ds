@@ -1,5 +1,6 @@
 # begin inter imports
 from cryptolytic.start import init
+init()
 import cryptolytic.model.model_framework as model_framework
 import cryptolytic.model.data_work as dw
 import cryptolytic.data.historical as h
