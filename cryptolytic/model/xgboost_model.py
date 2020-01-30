@@ -6,14 +6,6 @@ import cryptolytic.data.historical as h
 from cryptolytic.start import init
 
 
-def arb():
-    # get (normalized/feature engineered) data and model get model for a given trading pair
-    # train test split
-    # two week gap between train and test sets to check model performance (maybe not)
-    # load model, prun predictiotn s
-    pass
-
-
 def performance(X_test, y_preds):
     """ Takes in a test dataset and a model's predictions, calculates and returns
         the profit or loss. When the model generates consecutive buy predictions, 
@@ -101,7 +93,7 @@ def trade_model(df, params={}):
     # Get profit and loss
 
 
-def xgboost_data_splice(df):
+def data_splice(df):
     '''
     Funciton splices data into x and y train and test
     Requires dataframe of data
@@ -124,10 +116,10 @@ def xgboost_data_splice(df):
     y_train = train[target]
     y_test = test[target]
 
-    return x_train, y_train, x_test, y_test
+    return X_train, y_train, X_test, y_test
 
 
-def xgboost_create_model(params={}):
+def create_model(params={}):
     # load data
     max_depth = 17
     max_features = 40
@@ -141,7 +133,7 @@ def xgboost_create_model(params={}):
     return model
 
 
-def xgboost_fit_model(model, x_train, y_train):
+def fit_model(model, x_train, y_train):
     # Fit the given model with the x_train and y_train data
     model.fit(x_train, y_train)
     # Return the fitted model

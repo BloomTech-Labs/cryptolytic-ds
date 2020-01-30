@@ -35,9 +35,12 @@
           "btc_usdt",
 		  "bat_btc",
 		  "link_eth",
-		  "bch_btc",
+		  "bab_btc",
 		  "eos_usdt"
-        ]
+        ],
+		"rename_pairs" : {
+			"bab_btc" : "bch_btc"
+		} 
       }
     },
     "timestamp_format": "milliseconds",

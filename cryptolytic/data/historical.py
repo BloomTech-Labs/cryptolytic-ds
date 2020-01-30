@@ -288,32 +288,6 @@ def yield_unique_pair(return_api=True):
     return pairs
 
 
-def sample_every_pair(n=3000, query={}):
-    """Function that tries to sample for every pair that matches the query
-        into a dataframe.
-       query: paremeters for the db query"""
-    df = pd.DataFrame()
-
-    # can't specify these with this function
-    assert not {'api', 'exchange_id', 'trading_pair'}.issubset(query)
-    assert {'period'}.issubset(query)
-  
-    def filter_pairs():
-        keys = ['api', 'exchange_id', 'trading_pair']
-        thing = select_keys(query, keys)
-        return filter(lambda pair: 
-                      dict_matches(thing, dict(zip(keys, pair))), 
-                      yield_unique_pair())
-
-    for api, exchange_id, trading_pair in filter_pairs():
-        d = {'api': api,
-             'exchange_id': exchange_id,
-             'trading_pair': trading_pair}
-        d.update(query)  # mutates
-        df = df.append(sql.get_some_candles(d, n, verbose=True))
-    return df
-
-
 def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
                 num_retries=0):
     """Returns true if updated, or None if the task should be dropped"""
@@ -355,6 +329,10 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     # Insert into sql
     try:
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
+        # for some exchanges, pairs are listed under odd names. Need to correct for common name.
+        rename_pairs = api_info[api]['exchanges'][exchange_id].get('rename_pairs')
+        if rename_pairs is not None and candle_info['trading_pair'] in rename_pairs:
+            candle_info['trading_pair'] = rename_pairs[candle_info['trading_pair']]
 
         sql.candlestick_to_sql(candle_info)
         return True  # ran without error
@@ -414,20 +392,28 @@ def fill_missing_candles():
 def get_data(exchange_id, trading_pair, period, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
+    for usage in models.
     """
 
+    
     print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
+
+    # Pull in data for the given trading pair at the given time on the given exchange
     df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
               'exchange_id': exchange_id}, n=n)
     df = df_orig
+
 
     # # some times a small of candles will be returned and it won't work wi
     # if df.shape[0] < 1:
     #     return
 
-    def price_increase(percent_diff, top5percent):
+    def price_increase(percent_diff, bottom5percent, top5percent):
+        """Classify price changes into three types of categories"""
         if percent_diff > top5percent:
             return 1
+        elif percent_diff < bottom5percent:
+            return -1
         return 0
 
     try:
@@ -435,22 +421,39 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
         # filter out timestamp_ metrics
         df = df.filter(regex="(?!timestamp_.*)", axis=1)
+
+        # Feature engineering
         df = ta.add_all_ta_features(df, open="open", high="high", low="low",
                                     close="close", volume="volume").fillna(axis=1, value=0)
         df_shifted = df.shift(1,fill_value=0)
         df_diff = (df - df_shifted).rename(lambda x: x+'_diff', axis=1)
         df = pd.concat([df, df_diff], axis=1)
-        df['diff_percent'] = df['close'].pct_change(12).fillna(0)
-        print("oeu", df)
-        df['price_increased'] = df['diff_percent'].apply(lambda x: price_increase(x, df['diff_percent'].quantile(0.95)))
-        print("oeu", df)
-        # 50, 100 
-        # 1 - 100 / 50
-        # .25
+        df['diff_percent'] = df['close'].pct_change(1).fillna(0)
 
 
+        # Categorical feature for xgboost trading model 
+        bottom5percent = df['diff_percent'].quantile(0.05)
+        top5percent = df['diff_percent'].quantile(0.95)
+        df['price_increased'] = df['diff_percent'].apply(lambda x: price_increase(x, bottom5percent, top5percent))
+
+        # Categorical feature for xgboost arbitrage model
+        df['arb_signal_class'] = 0
+        # if the next candle is in positive arbitrage (1%), assign it the category 1
+        mask =  df['arb_signal'].shift(1) > 0.01
+        df['arb_signal_class'][mask] = 1 
+        # if the next candle is in negative arbitrage (-1%), assign it the category -1
+        mask =  df['arb_signal'].shift(1) < 0.01
+        df['arb_signal_class'][mask] = -1
+        
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
 
+        # Don't normalize columns which are percentages, check for some other things later
+        # TODO check for infs and nans and maybe not normalize those features
+        # , especially if that number is high.
+        column = df.columns.get_loc('diff_percent')
+        dataset[:, column] = df['diff_percent']
+        column = df.columns.get_loc('arb_signal')
+        dataset[:, column] = df['arb_signal']
         return df, dataset
 
     except Exception as e:

@@ -119,7 +119,7 @@ def get_df(info, n=1000):
     df['high_m_low'] = df['high'] - df['low']
     df['close_m_open'] = df['close'] - df['open']
     dfarb = sql.get_arb_info(info, n)
-    
+
     merged = merge_candle_dfs(df, dfarb)
     assert merged.isna().any().any() == False
     return merged

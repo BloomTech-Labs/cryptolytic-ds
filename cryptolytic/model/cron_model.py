@@ -6,7 +6,7 @@ import cryptolytic.data.historical as h
 import cryptolytic.data as d
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
-import cryptolytic.model.xgboost_model as xgmod
+import cryptolytic.model.model as xgmod
 
 # tensorflow imports
 import tensorflow as tf
@@ -192,7 +192,7 @@ def cron_train2():
 # split data into smaller batches
 
 
-def xg_cron_train():
+def xgb_trade_cron_train():
 
     # Initialize the function and pull info from the .env file
     init()
@@ -237,19 +237,19 @@ def xg_cron_train():
         print(df.shape, dataset.shape)
 
         # Find the x and y train and test data
-        x_train, y_train, x_test, y_test = xgmod.xgboost_data_splice(df)
+        x_train, y_train, x_test, y_test = xgmod.data_splice(df)
 
         # Create a model if not exists, else load model if it
         # not loaded
         model = None
         if not os.path.exists(model_path):
-            model = xgmod.xgboost_create_model()
+            model = xgmod.create_model()
 
             pass
             # model = # Model training/update functions here
 
         # fit the model
-        model = xbmod.xgboost_fit_model(model, x_train, y_train)
+        model = xbmod.fit_model(model, x_train, y_train)
         print(f'Saved model {model_path}')
         model.save(model_path)
         # Upload file to s3

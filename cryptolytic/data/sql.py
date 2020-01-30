@@ -385,7 +385,7 @@ def get_arb_info(info, n=1000):
            group by (timestamp)
            )
 
-          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
+          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg" as arb_signal from
                  (sub inner join thing on sub.timestamp = thing.timestamp)
           where exchange=%(exchange_id)s
           order by thing.timestamp
