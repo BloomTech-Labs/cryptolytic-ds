@@ -261,7 +261,7 @@ def xgb_cron_train(model_type):
     # Find the current time
     now = int(time.time())
     pull_size = 5000
- 
+
     # Check for missing data, pull data from APIs if data is missing
     # h.live_update()
 
@@ -276,7 +276,9 @@ def xgb_cron_train(model_type):
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.pkl')
+        model_path = mfw.get_path(
+            'models', model_type, exchange_id, trading_pair, '.pkl'
+            )
 
         n = params['train_size']
 
@@ -289,24 +291,23 @@ def xgb_cron_train(model_type):
 
         if df is None:
             continue
-       
+
         if model_type == 'trade':
             target = df.columns.get_loc('price_increased')
         elif model_type == 'arbitrage':
             target = df.columns.get_loc('arb_signal_class')
-
 
         print(df)
         print(n)
         print(df.shape, dataset.shape)
 
         # Find the x and y train and test data
-        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
 
         # Create a model if not exists, else load model if it
         # not loaded
         model = None
-        # TODO remove comment on below to restory functionality beyond testing enviornments
+        # TODO remove comment on below to restory functionality
+        # beyond testing enviornments
         # if not os.path.exists(model_path):
         if True:
             if model_type == 'trade':
@@ -332,14 +333,18 @@ def xgb_cron_pred(model_type='trade'):
     availble for that trading pair complete with
     """
     init()
-    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+    all_preds = pd.DataFrame(
+        columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp']
+        )
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         print(exchange_id, trading_pair)
-      
-        model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.pkl')
+
+        model_path = mfw.get_path(
+            'models', model_type, exchange_id, trading_pair, '.pkl'
+            )
         if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}') 
+            print(f'Model not available for {exchange_id}, {trading_pair}')
             continue
 
         model = pickle.load(open(model_path, 'rb'))
@@ -347,8 +352,9 @@ def xgb_cron_pred(model_type='trade'):
         n = params['history_size']+params['lahead']
 
         df, dataset = h.get_latest_data(
-                          exchange_id, trading_pair, 
-                          params['period'], 
+                          exchange_id,
+                          trading_pair,
+                          params['period'],
                           n=n)
 
         if df is None:
@@ -358,28 +364,22 @@ def xgb_cron_pred(model_type='trade'):
 
         print(dataset.shape)
 
-        # Get the data in the same format that the model expects for its training
-        x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, target,
-            params['batch_size'], 
-            params['history_size'],
-            params['step'], 
-            lahead=0,  # Zero look ahead, don't truncate any data for the prediction
-            ratio=1.0)
-
-
+        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
         if x_train.shape[0] < n:
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
-
-
 
         preds = model.predict(x_train)[:, 0][-params['lahead']]
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + period * i for i in range(len(preds))]
-        yo = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
-        preds_path =   model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.csv')
+        yo = pd.DataFrame(
+            {'close': preds, 'api': api, 'exchange': exchange_id,
+             'timestamp':  timestamps}
+            )
+        preds_path = mfw.get_path(
+            'preds', model_type, exchange_id, trading_pair, '.csv'
+            )
         aws.upload_file(preds_path)
         all_preds = pd.concat([all_preds, yo], axis=1)
 
