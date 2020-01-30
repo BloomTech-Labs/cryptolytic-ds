@@ -40,17 +40,17 @@ params = {
 
 def cron_pred():
     """
-    - Loads model for the given unique trading pair, gets the latest data 
-    availble for that trading pair complete with 
+    - Loads model for the given unique trading pair, gets the latest data
+    availble for that trading pair complete with
     """
     init()
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_model_path('neural', exchange_id, trading_pair, '.h5')
+        model_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.h5')
         aws.download_file(model_path)
         if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}') 
+            print(f'Model not available for {exchange_id}, {trading_pair}')
             continue
 
         model = tf.keras.models.load_model(model_path)
@@ -58,8 +58,8 @@ def cron_pred():
         n = params['history_size']+params['lahead']
 
         df, dataset = h.get_latest_data(
-                          exchange_id, trading_pair, 
-                          params['period'], 
+                          exchange_id, trading_pair,
+                          params['period'],
                           # Pull history_size + lahead length, shouldn't need more to make a 
                           # prediction
                           n=n)
@@ -117,7 +117,7 @@ def cron_train():
         time_counter = start
         while True:
             gc.collect()
-            model_path = mfw.get_model_path('neural', exchange_id, trading_pair, '.h5')
+            model_path = mfw.get_path('neural', exchange_id, trading_pair, '.h5')
 
             # model = tf.keras.load_model(path)
 
@@ -209,7 +209,7 @@ def xgb_cron_train(model_type):
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_model_path(model, exchange_id, trading_pair, '.pkl')
+        model_path = mfw.get_path('neural', model_type, exchange_id, trading_pair, '.pkl')
 
         n = params['train_size']
 
@@ -260,14 +260,14 @@ def xgb_cron_train(model_type):
 
 def xgb_cron_pred(model_type='trade'):
     """
-    - Loads model for the given unique trading pair, gets the latest data 
-    availble for that trading pair complete with 
+    - Loads model for the given unique trading pair, gets the latest data
+    availble for that trading pair complete with
     """
     init()
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_model_path(model_type, exchange_id, trading_pair, '.pkl')
+        model_path = mfw.get_path('neural', model_type, exchange_id, trading_pair, '.pkl')
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
@@ -294,7 +294,7 @@ def xgb_cron_pred(model_type='trade'):
             params['batch_size'], 
             params['history_size'],
             params['step'], 
-            lahead=0, # Zero look ahead, don't truncate any data for the prediction
+            lahead=0,  # Zero look ahead, don't truncate any data for the prediction
             ratio=1.0)
 
 
@@ -311,6 +311,3 @@ def xgb_cron_pred(model_type='trade'):
         all_preds = pd.concat([all_preds, yo], axis=1)
 
     return all_preds
-
-
-
