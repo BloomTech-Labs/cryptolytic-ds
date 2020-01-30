@@ -115,9 +115,10 @@ def get_table_columns(table_name):
 
 
 def add_candle_data_to_table(df, cur):
-    """pply(
-        Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method
+    """Builds a string from our data-set using the mogrify method which is
+        then called once using the execute method to insert the candlestick 
+        information (collected using functions in the historical file), into the 
+        database. 
     """
 
     order = get_table_columns('candlesticks')

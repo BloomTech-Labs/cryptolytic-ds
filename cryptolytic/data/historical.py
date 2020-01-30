@@ -46,39 +46,45 @@ def crypto_full_name(crypto_short):
     return lookup
 
 
-def trading_pair_info(api, x):
-    """Returns full info for the trading pair necessary for the exchange.
-    x: e.g. btc_eth
+def trading_pair_info(api, trading_pair):
+    """Returns full info for the trading pair necessary for the etrading_pairchange.
+    trading_pair: e.g. btc_eth
     """
     # btcheth style trading pairs
-    baseId, quoteId = x.split('_')
+    if api_info[api].get('rename_pairs') is not None:
+        if trading_pair in api_info[api]['rename_pairs']:
+            trading_pair = api_info[api]['rename_pairs'][trading_pair]
+
+    baseId, quoteId = trading_pair.split('_')
     handled = False
 
     if api_info.get(api).get("pair_reverse"):
         temp = baseId
         baseId = quoteId
         quoteId = temp
-        x = baseId + '_' + quoteId
+        trading_pair = baseId + '_' + quoteId
         handled = True
     if api_info.get(api).get("pair_no_underscore"):
-        x = x.replace('_', '')
+        trading_pair = trading_pair.replace('_', '')
         handled = True
     if api_info.get(api).get("pair_uppercase"):
-        x = x.upper()
+        trading_pair = trading_pair.upper()
         handled = True
     if api_info.get(api).get("pair_dash_seperator"):
-        x = x.replace('_', '-')
+        trading_pair = trading_pair.replace('_', '-')
         handled = True
     if api in {'coincap'}:
-        baseId = crypto_full_name(baseId).lower()
-        quoteId = crypto_full_name(quoteId).lower()
+        baseId = crypto_full_name(baseId).lower().replace(' ', '-')
+        quoteId = crypto_full_name(quoteId).lower().replace(' ', '-')
         handled = True
+
+
     if not handled:
-        raise Exception('API not supported ', api)
+        raise Etrading_pairception('API not supported ', api)
 
     return {'baseId'      : baseId,
             'quoteId'     : quoteId,
-            'trading_pair': x}
+            'trading_pair': trading_pair}
 
 
 def convert_candlestick(candlestick, api, timestamp):
@@ -330,9 +336,6 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     try:
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
         # for some exchanges, pairs are listed under odd names. Need to correct for common name.
-        rename_pairs = api_info[api]['exchanges'][exchange_id].get('rename_pairs')
-        if rename_pairs is not None and candle_info['trading_pair'] in rename_pairs:
-            candle_info['trading_pair'] = rename_pairs[candle_info['trading_pair']]
 
         sql.candlestick_to_sql(candle_info)
         return True  # ran without error
@@ -360,7 +363,7 @@ def live_update(period=300):  # Period default is 5 minutes
         if len(d) == 0:
             break
         api, exchange_id, trading_pair = d[-1]  # get the current task
-
+        actual_pair = None
         print(api, exchange_id, trading_pair)
 
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800 # timestamp is January 1st 2019

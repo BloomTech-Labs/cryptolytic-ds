@@ -35,12 +35,8 @@
           "btc_usdt",
 		  "bat_btc",
 		  "link_eth",
-		  "bab_btc",
-		  "eos_usdt"
-        ],
-		"rename_pairs" : {
-			"bab_btc" : "bch_btc"
-		} 
+		  "bch_btc"
+        ]
       }
     },
     "timestamp_format": "milliseconds",
@@ -114,8 +110,11 @@
 		  "bch_btc",
 		  "eos_usd"
         ]
-      }
+	  }
     },
+    "rename_pairs" : {
+		    "bch_btc" : "bab_btc"
+	}, 
     "limit": 5000,
     "timestamp_format": "milliseconds",
     "candle_timestamp_format": "milliseconds",
