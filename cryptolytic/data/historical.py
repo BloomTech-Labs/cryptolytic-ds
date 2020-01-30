@@ -19,7 +19,8 @@ import logging
 import ciso8601
 
 
-# Json conversion dictionary for cryptocurrency abbreviations
+# Json conversion dictionary for cryptocurrency abbreviations needed for
+# some apis
 crypto_name_table = None
 with open('data/cryptocurrencies.json', 'r', encoding='utf-8') as f:
     crypto_name_table = json.load(f)
@@ -30,6 +31,10 @@ assert crypto_name_table.keys()
 If you are having timeout issues connecting to the AWS RDS instance, make sure
 to configure your AWS VPC security groups to allow outside access
 """
+
+# api_info.json file is used to store information regarding the api 
+# such as url for the api call, the trading pairs and exchanges 
+# supported for that api, etc.
 api_info = None
 with open('data/api_info.json', 'r') as f:
     api_info = json.load(f)
@@ -49,8 +54,8 @@ def crypto_full_name(crypto_short):
 def trading_pair_info(api, trading_pair):
     """Returns full info for the trading pair necessary for the etrading_pairchange.
     trading_pair: e.g. btc_eth
+    Returns: e.g. BTC ETH if the pair was reveresed and uppercased
     """
-    # btcheth style trading pairs
     if api_info[api].get('rename_pairs') is not None:
         if trading_pair in api_info[api]['rename_pairs']:
             trading_pair = api_info[api]['rename_pairs'][trading_pair]
@@ -74,13 +79,14 @@ def trading_pair_info(api, trading_pair):
         trading_pair = trading_pair.replace('_', '-')
         handled = True
     if api in {'coincap'}:
+        # coincap uses full crypto names, and uses - in place of spaces 
         baseId = crypto_full_name(baseId).lower().replace(' ', '-')
         quoteId = crypto_full_name(quoteId).lower().replace(' ', '-')
         handled = True
 
 
     if not handled:
-        raise Etrading_pairception('API not supported ', api)
+        raise Exception('API not supported ', api)
 
     return {'baseId'      : baseId,
             'quoteId'     : quoteId,
@@ -128,8 +134,6 @@ def convert_candlestick(candlestick, api, timestamp):
     except Exception:
         raise Exception("API: ", api, "\nInvalid Candle: ", candlestick, "\nOld candle: ", candlestick_old)
 
-#    candlestick['timestamp'] = timestamp
-    # only keep these keys, otherwise can mess up insertion
     return {key: candlestick[key] for key in ohclv}
 
 
@@ -286,19 +290,22 @@ def yield_unique_pair(return_api=True):
         api_exchanges = api_data['exchanges']
         for exchange_id, exchange_data in api_exchanges.items():
             for trading_pair in exchange_data['trading_pairs']:
-                if return_api == True:
+                if return_api:
                     pairs.append((api, exchange_id, trading_pair))
                 else:
-                    pairs.append((exchange_id, trading_pair))
+                    if (exchange_id, trading_pair) not in pairs:
+                      pairs.append((exchange_id, trading_pair))
 
     return pairs
 
 
 def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
                 num_retries=0):
-    """Returns true if updated, or None if the task should be dropped"""
-    # exit if num retries > 100
-    if num_retries > 20:
+    """This functional inserts candlestick information into the database,
+        called by live_update function. 
+       Returns true if updated, or None if the task should be dropped"""
+    # exit if num retries > 20
+    if num_retries > 10:
         return
 
     now = time.time()
@@ -317,13 +324,14 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
                                    limit=limit)
     except Exception as e:
         print(f'Error encountered: {e}')
-        logging.error(e)
 
     # If the last timestep is equal to the ending candle
     # that there is such a gap in candle data that the time frame cannot
     # advance to new candles, so continue with this task at an updated timestep
     if candle_info is None or candle_info['last_timestamp'] == timestamp:
-        if timestamp >= now - 86400:  # seconds in a day
+        # If the timestamp is from a day ago but there is no candle information, 
+         # probably because such historical information is not available. No retry.
+        if timestamp >= now - 86400: 
             return
         print(f'Retry {api} {exchange_id} {trading_pair} {timestamp} {num_retries}')
         return update_pair(api, exchange_id, trading_pair, timestamp+limit*period, period, num_retries + 1)
@@ -335,8 +343,6 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
     # Insert into sql
     try:
         print("Adding Candlestick to database", api, exchange_id, trading_pair, timestamp)
-        # for some exchanges, pairs are listed under odd names. Need to correct for common name.
-
         sql.candlestick_to_sql(candle_info)
         return True  # ran without error
     except AssertionError as e:
@@ -354,32 +360,29 @@ def live_update(period=300):  # Period default is 5 minutes
 
     # use a deque to rotate the tasks, and pop them when they are done.
     # this is to avoid sending too many requests to one api at once.
-    d = deque()
-
-    for api, exchange_id, trading_pair in yield_unique_pair():
-        d.append([api, exchange_id, trading_pair])
+    tasks = deque(yield_unique_pair())
 
     for i in range(10_000):
-        if len(d) == 0:
+        if len(tasks) == 0:
             break
-        api, exchange_id, trading_pair = d[-1]  # get the current task
+        api, exchange_id, trading_pair = tasks[-1]  # get the current task
         actual_pair = None
         print(api, exchange_id, trading_pair)
 
         start = sql.get_latest_date(exchange_id, trading_pair, period) or 1546300800 # timestamp is January 1st 2019
 
         # already at the latest date, remove
-        if start >= now-86400:
-            d.pop()
+        if start >= now-period:
+            tasks.pop()
             continue
 
         # Returns true if updated, or None if the task should be dropped
         result = update_pair(api, exchange_id, trading_pair, start, period)
         if result is None:
-            d.pop()
+            tasks.pop()
             continue
         else:
-            d.rotate()
+            tasks.rotate()
 
 
 def fill_missing_candles():
@@ -392,24 +395,19 @@ def fill_missing_candles():
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
 
+# TODO should place this in the same file with get_df and get_df should probably 
+# be just impute_df and this shoudl candle sql.get_some_candles, pass that to impute_df,
+# and then also call feaure_engineer_df, instead.
 def get_data(exchange_id, trading_pair, period, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
-    for usage in models.
+    for usage in models. 
     """
-
-    
     print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
 
     # Pull in data for the given trading pair at the given time on the given exchange
-    df_orig = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
+    df = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
               'exchange_id': exchange_id}, n=n)
-    df = df_orig
-
-
-    # # some times a small of candles will be returned and it won't work wi
-    # if df.shape[0] < 1:
-    #     return
 
     def price_increase(percent_diff, bottom5percent, top5percent):
         """Classify price changes into three types of categories"""

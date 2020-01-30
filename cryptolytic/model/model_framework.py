@@ -22,6 +22,7 @@ import tensorflow.keras.models as models
 import tensorflow.keras.constraints as constraints
 import tensorflow.keras.regularizers as regularizers
 from tensorflow.keras.initializers import glorot_uniform, glorot_uniform
+from sklearn.metrics import confusion_matrix
 
 # sklearn imports
 from sklearn.preprocessing import MinMaxScaler
@@ -120,6 +121,16 @@ def predictions():
     return preds
 
 
+# https://towardsdatascience.com/types-of-convolutions-in-deep-learning-717013397f4d 
+# TODO try downsampling and then upsampling in the first part of the network
+# , can do downsampling by increasing stride or Pooling
+# dilation in a convolution will add spacing between values in a kernel,
+# so a 3x3 kernel with a dilation of 2 will have the same field view as 
+# 5x5 kernel, while only taking 9 parameters, so can get a wide field of view 
+# at low cost.
+# Transposed convolutions, sometimes called deconvolutions.
+# Can be used for upsampling the image, might need padding. 
+# Utilize skip connections into RNN and should improve model performance.
 def create_model(x_train, params):
     batch_size = params['batch_size']
     lahead = params['lahead']

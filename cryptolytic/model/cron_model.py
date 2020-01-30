@@ -6,7 +6,8 @@ import cryptolytic.data.historical as h
 import cryptolytic.data as d
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
-import cryptolytic.model.model as xgmod
+import cryptolytic.model.xgboost_model as xgmod
+import pickle
 
 # tensorflow imports
 import tensorflow as tf
@@ -100,6 +101,7 @@ def upload_file(path):
     return s3.upload_file(path, bucket_name, path)
 
 
+# TODO improve performance
 def cron_train2():
     """
     - Loads model for the given unique trading pair, gets the latest data
@@ -192,7 +194,7 @@ def cron_train2():
 # split data into smaller batches
 
 
-def xgb_trade_cron_train():
+def xgb_cron_train():
 
     # Initialize the function and pull info from the .env file
     init()
@@ -213,8 +215,6 @@ def xgb_trade_cron_train():
 
         gc.collect()
         model_path = mfw.get_model_path(exchange_id, trading_pair)
-
-        # model = tf.keras.load_model(path)
 
         n = params['train_size']
 
@@ -249,13 +249,74 @@ def xgb_trade_cron_train():
             # model = # Model training/update functions here
 
         # fit the model
-        model = xbmod.fit_model(model, x_train, y_train)
+        model = xgmod.fit_model(model, x_train, y_train)
         print(f'Saved model {model_path}')
-        model.save(model_path)
+#        model.save(model_path)
+        pickle.dump(model, open(model_path+'.pkl').format(
+                        model_name=model_name), 'wb'))
         # Upload file to s3
         upload_file(model_path)
 
+
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
-
     return
+
+def xgb_cron_pred():
+    """
+    - Loads model for the given unique trading pair, gets the latest data 
+    availble for that trading pair complete with 
+    """
+    init()
+    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+
+    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        model_path = mfw.get_model_path(exchange_id, trading_pair)
+        if not os.path.exists(model_path):
+            print(f'Model not available for {exchange_id}, {trading_pair}') 
+            continue
+
+        model = pickle.load(open(model_path, 'rb'))
+
+        n = params['history_size']+params['lahead']
+
+        df, dataset = h.get_latest_data(
+                          exchange_id, trading_pair, 
+                          params['period'], 
+                          # Pull history_size + lahead length, shouldn't need more to make a 
+                          # prediction
+                          n=n)
+
+        if df is None:
+            continue
+
+        target = df.columns.get_loc('close')
+
+        print(dataset.shape)
+
+        # Get the data in the same format that the model expects for its training
+        x_train, y_train, x_val, y_val = dw.windowed(
+            dataset, target,
+            params['batch_size'], 
+            params['history_size'],
+            params['step'], 
+            lahead=0, # Zero look ahead, don't truncate any data for the prediction
+            ratio=1.0)
+
+
+        if x_train.shape[0] < n:
+            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
+            continue
+
+
+        preds = model.predict(x_train)[:, 0][-params['lahead']]
+
+        last_timestamp = df.timestamp[-1]
+        timestamps = [last_timestamp + period * i for i in range(len(preds))]
+        yo = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
+        all_preds = pd.concat([all_preds, yo], axis=1)
+
+    return all_preds
+
+
+
