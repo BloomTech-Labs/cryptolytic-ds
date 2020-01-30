@@ -22,6 +22,7 @@ import gc
 
 bucket_name = 'crypto-buckit'
 
+
 params = {
         'history_size': 400,
         'lahead': 12*3,
@@ -31,6 +32,24 @@ params = {
         'train_size': 10000,
         'ncandles': 5000
 }
+
+
+def download_file(path):
+    """
+    Get file from s3
+    """
+    s3 = session.resource('s3')
+    s3_object = s3.Object(bucket_name=bucket_name, key=path)
+    return s3_object.download_file(path)
+
+
+def upload_file(path):
+    """
+    Put file on s3
+    """
+    s3 = session.client('s3')
+    return s3.upload_file(path, bucket_name, path)
+
 
 
 def cron_pred2():
@@ -43,6 +62,7 @@ def cron_pred2():
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         model_path = mfw.get_model_path(exchange_id, trading_pair)
+        download_file(model_path)
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
@@ -88,23 +108,6 @@ def cron_pred2():
         all_preds = pd.concat([all_preds, yo], axis=1)
 
     return all_preds
-
-
-def download_file(path):
-    """
-    Get file from s3
-    """
-    s3 = session.resource('s3')
-    s3_object = s3.Object(bucket_name=bucket_name, key=path)
-    return s3_object.download_file(path)
-
-
-def upload_file(path):
-    """
-    Put file on s3
-    """
-    s3 = session.client('s3')
-    return s3.upload_file(path, bucket_name, path)
 
 
 # TODO improve performance
@@ -263,7 +266,7 @@ def xgb_cron_train():
         print(f'Saved model {model_path}')
 #        model.save(model_path)
         pickle.dump(model, open(model_path+'.pkl').format(
-                        model_name=model_name), 'wb'))
+                        model_name=model_name), 'wb')
         # Upload file to s3
         upload_file(model_path)
 
