@@ -8,7 +8,10 @@ import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
 import cryptolytic.model.xgboost_model as xgmod
 import cryptolytic.data.aws as aws
+import cryptolytic.model.xgboost_model as xtrade
+import cryptolytic.model.xgboost_arb_model as xarb
 import pickle
+
 
 # tensorflow imports
 import tensorflow as tf
@@ -35,7 +38,7 @@ params = {
 
 
 
-def cron_pred2():
+def cron_pred():
     """
     - Loads model for the given unique trading pair, gets the latest data 
     availble for that trading pair complete with 
@@ -94,7 +97,7 @@ def cron_pred2():
 
 
 # TODO improve performance
-def cron_train2():
+def cron_train():
     """
     - Loads model for the given unique trading pair, gets the latest data
     availble for that trading pair complete with

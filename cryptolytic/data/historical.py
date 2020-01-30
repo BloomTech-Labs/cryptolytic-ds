@@ -430,7 +430,7 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         df_diff = (df - df_shifted).rename(lambda x: x+'_diff', axis=1)
         df = pd.concat([df, df_diff], axis=1)
         df['diff_percent'] = df['close'].pct_change(1).fillna(0)
-
+        df = df.drop(['volume_adi'], axis=1)
 
         # Categorical feature for xgboost trading model 
         bottom5percent = df['diff_percent'].quantile(0.05)
@@ -445,8 +445,12 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         # if the next candle is in negative arbitrage (-1%), assign it the category -1
         mask =  df['arb_signal'].shift(1) < 0.01
         df['arb_signal_class'][mask] = -1
+
         
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
+        idx = np.isinf(dataset)
+        dataset[idx] = 0
+
 
         # Don't normalize columns which are percentages, check for some other things later
         # TODO check for infs and nans and maybe not normalize those features
