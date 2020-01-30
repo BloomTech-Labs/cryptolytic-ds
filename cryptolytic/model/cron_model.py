@@ -264,6 +264,7 @@ def xgb_cron_train(model_type):
 
     # Check for missing data, pull data from APIs if data is missing
     # h.live_update()
+    target = None
 
     # Check for every unqiue trading pair in each exchange
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
@@ -277,8 +278,8 @@ def xgb_cron_train(model_type):
 
         gc.collect()
         model_path = mfw.get_path(
-            'models', model_type, exchange_id, trading_pair, '.pkl'
-            )
+            'models', model_type, exchange_id, trading_pair, '.pkl')
+
 
         n = params['train_size']
 
@@ -297,6 +298,8 @@ def xgb_cron_train(model_type):
         elif model_type == 'arbitrage':
             target = df.columns.get_loc('arb_signal_class')
 
+        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
+    
         print(df)
         print(n)
         print(df.shape, dataset.shape)
@@ -334,8 +337,7 @@ def xgb_cron_pred(model_type='trade'):
     """
     init()
     all_preds = pd.DataFrame(
-        columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp']
-        )
+        columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         print(exchange_id, trading_pair)
@@ -369,12 +371,12 @@ def xgb_cron_pred(model_type='trade'):
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
 
-        preds = model.predict(x_train)[:, 0][-params['lahead']]
+        preds = model.predict(x_train)
 
         last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + period * i for i in range(len(preds))]
+        timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
         yo = pd.DataFrame(
-            {'close': preds, 'api': api, 'exchange': exchange_id,
+            {'close': preds, 'exchange': exchange_id,
              'timestamp':  timestamps}
             )
         preds_path = mfw.get_path(

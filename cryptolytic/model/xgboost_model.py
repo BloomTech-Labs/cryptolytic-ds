@@ -111,8 +111,8 @@ def data_splice(dataset, target):
     # 2 = price decrease # TODO Implemant this expanded category
 #    target = 'price_increased'
     # define X, y vectors
-    X_train = train[:, 0:50]
-    X_test = test[:, 0:50]
+    X_train = train[:, 0:80]
+    X_test = test[:, 0:80]
     y_train = train[:, target]
     y_test = test[:, target]
 
@@ -122,7 +122,7 @@ def data_splice(dataset, target):
 def create_model(params={}):
     # load data
     max_depth = 17
-    max_features = 40
+    max_features = 70
 
     # Random forest classifier
     model = RandomForestClassifier(max_features=max_features,
