@@ -91,12 +91,18 @@ def cron_pred2():
 
 
 def download_file(path):
+    """
+    Get file from s3
+    """
     s3 = session.resource('s3')
     s3_object = s3.Object(bucket_name=bucket_name, key=path)
     return s3_object.download_file(path)
 
 
 def upload_file(path):
+    """
+    Put file on s3
+    """
     s3 = session.client('s3')
     return s3.upload_file(path, bucket_name, path)
 
@@ -214,7 +220,7 @@ def xgb_cron_train():
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_model_path(exchange_id, trading_pair)
+        model_path = mfw.get_model_path(exchange_id, trading_pair, '.h5')
 
         n = params['train_size']
 
@@ -243,9 +249,13 @@ def xgb_cron_train():
         # not loaded
         model = None
         if not os.path.exists(model_path):
-            model = xgmod.create_model()
+            model_type = 'trade' # 'arbitrage'
+            if model_type == 'trade':
+                model = xgmod.create_model()
 
-            pass
+            elif model_type == 'arbitrage':
+#                model = xgmod.create_model()
+                pass
             # model = # Model training/update functions here
 
         # fit the model
@@ -260,7 +270,6 @@ def xgb_cron_train():
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
-    return
 
 def xgb_cron_pred():
     """
@@ -271,7 +280,7 @@ def xgb_cron_pred():
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_model_path(exchange_id, trading_pair)
+        model_path = mfw.get_model_path(exchange_id, trading_pair, '.pkl')
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue

@@ -197,8 +197,8 @@ def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
     return model
 
 
-def get_model_path(exchange_id, trading_pair):
-    return f'models/model_{exchange_id}_{trading_pair}.h5'
+def get_model_path(exchange_id, trading_pair, ext):
+    return f'models/model_{exchange_id}_{trading_pair}{ext}'
 
 
 def load_all_models(folder):
