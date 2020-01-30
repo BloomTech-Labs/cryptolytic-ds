@@ -1,3 +1,4 @@
+# begin inter imports
 from cryptolytic.start import init
 import cryptolytic.model.model_framework as model_framework
 import cryptolytic.model.data_work as dw
@@ -5,8 +6,7 @@ import cryptolytic.data.historical as h
 import cryptolytic.data as d
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
-from io import StringIO
-import gc
+import cryptolytic.model.xgboost_model as xgmod
 
 # tensorflow imports
 import tensorflow as tf
@@ -16,6 +16,8 @@ import os
 import ta
 import pandas as pd
 import time
+from io import StringIO
+import gc
 
 bucket_name = 'crypto-buckit'
 
@@ -100,7 +102,7 @@ def upload_file(path):
 
 def cron_train2():
     """
-    - Loads model for the given unique trading pair, gets the latest data 
+    - Loads model for the given unique trading pair, gets the latest data
     availble for that trading pair complete with
     """
     init()
@@ -114,6 +116,7 @@ def cron_train2():
         # Loop until training on all the data want to train on or
         # if there is an error don't train
         start = int(now - params['ncandles'] * params['period'])
+        # time_counter is used for batch processing
         time_counter = start
         while True:
             gc.collect()
@@ -126,8 +129,8 @@ def cron_train2():
             # train in batches of 3000
 
             df, dataset = h.get_data(
-                              exchange_id, trading_pair, 
-                              params['period'], 
+                              exchange_id, trading_pair,
+                              params['period'],
                               start=time_counter,
                               n=3000)
 
@@ -174,6 +177,7 @@ def cron_train2():
             model = None
             if not os.path.exists(model_path):
                 model = mfw.create_model(x_train, params)
+            # elif is for retraining for models
             elif model is None:
                 model = tf.keras.models.load_model(model_path)
 
@@ -186,3 +190,72 @@ def cron_train2():
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
+
+
+def xg_cron_train():
+
+    # Initialize the function and pull info from the .env file
+    init()
+
+    # Find the current time
+    now = int(time.time())
+    pull_size = 5000
+
+    # Check for missing data, pull data from APIs if data is missing
+    h.live_update()
+
+    # Check for every unqiue trading pair in each exchange
+    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        # Loop until training on all the data want to train on or
+        # if there is an error don't train
+        start = int(now - params['ncandles'] * params['period'])
+        time_counter = start
+
+        gc.collect()
+        model_path = mfw.get_model_path(exchange_id, trading_pair)
+
+        # model = tf.keras.load_model(path)
+
+        n = params['train_size']
+
+        # train in batches of 3000
+        df, dataset = h.get_latest_data(
+                            exchange_id,
+                            trading_pair,
+                            params['period'],
+                            n=3000
+                            )
+
+        if df is None:
+            break
+
+        print(df)
+
+        target = df.columns.get_loc('close')
+
+        print(n)
+        print(df.shape, dataset.shape)
+
+        # Find the x and y train and test data
+        x_train, y_train, x_test, y_test = xgmod.xgboost_data_splice(df)
+
+        # Create a model if not exists, else load model if it
+        # not loaded
+        model = None
+        if not os.path.exists(model_path):
+            model = xgmod.xgboost_create_model()
+
+            pass
+            # model = # Model training/update functions here
+
+        # fit the model
+        model = xbmod.xgboost_fit_model(model, x_train, y_train)
+        print(f'Saved model {model_path}')
+        model.save(model_path)
+        # Upload file to s3
+        upload_file(model_path)
+
+# be able to have model train on a large series of time without crashing
+# split data into smaller batches
+
+    return

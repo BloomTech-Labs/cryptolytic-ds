@@ -120,47 +120,6 @@ def predictions():
     return preds
 
 
-def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
-    epochs = 10
-    # batch size higher than 1 c  epochs = 10
-    for i in range(epochs):
-        model.fit(inputX,
-                  inputy,
-                  batch_size=batch_size,
-                  epochs=1,
-                  verbose=1,
-                  use_multiprocessing=True,
-                  shuffle=False,
-                  workers=4,
-                  validation_data=(x_val, y_val))
-        # history['loss'].append(model.history.history['loss'])
-        # history['val_loss'].append(model.history.history['val_loss'])
-#        model.reset_states()
-    # pred = transformer.denormalize(model.predict(x_val)[:, 0], df, 'close')
-    # pred_history.append(pred)
-
-    return model
-
-
-def get_model_path(exchange_id, trading_pair):
-    return f'models/model_{exchange_id}_{trading_pair}.h5'
-
-
-def load_all_models(folder):
-    models = []
-    params = []
-    path = f'models/{folder}'
-    for m in os.listdir(path):
-        if m.endswith('.csv'):
-            params.append(pd.read_csv(m))
-        if not m.endswith('.h5'):
-            continue
-        m = tf.keras.models.load_model(m)
-        models.append(m)
-        print('Loaded %s' % path)
-    return models, params
-
-
 def create_model(x_train, params):
     batch_size = params['batch_size']
     lahead = params['lahead']
@@ -203,6 +162,47 @@ def create_model(x_train, params):
     model.compile(loss='mse',
                   optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001))
     return model
+
+
+def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
+    epochs = 10
+    # batch size higher than 1 c  epochs = 10
+    for i in range(epochs):
+        model.fit(inputX,
+                  inputy,
+                  batch_size=batch_size,
+                  epochs=1,
+                  verbose=1,
+                  use_multiprocessing=True,
+                  shuffle=False,
+                  workers=4,
+                  validation_data=(x_val, y_val))
+        # history['loss'].append(model.history.history['loss'])
+        # history['val_loss'].append(model.history.history['val_loss'])
+#        model.reset_states()
+    # pred = transformer.denormalize(model.predict(x_val)[:, 0], df, 'close')
+    # pred_history.append(pred)
+
+    return model
+
+
+def get_model_path(exchange_id, trading_pair):
+    return f'models/model_{exchange_id}_{trading_pair}.h5'
+
+
+def load_all_models(folder):
+    models = []
+    params = []
+    path = f'models/{folder}'
+    for m in os.listdir(path):
+        if m.endswith('.csv'):
+            params.append(pd.read_csv(m))
+        if not m.endswith('.h5'):
+            continue
+        m = tf.keras.models.load_model(m)
+        models.append(m)
+        print('Loaded %s' % path)
+    return models, params
 
 
 def create_framework_lstm(x_train, lstm_output_dimensionality=1):
