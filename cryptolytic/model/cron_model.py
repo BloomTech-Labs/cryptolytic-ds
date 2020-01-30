@@ -336,9 +336,6 @@ def xgb_cron_pred(model_type='trade'):
     availble for that trading pair complete with
     """
     init()
-    all_preds = pd.DataFrame(
-        columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
-
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         print(exchange_id, trading_pair)
 
@@ -375,14 +372,10 @@ def xgb_cron_pred(model_type='trade'):
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
-        yo = pd.DataFrame(
+        pd.DataFrame(
             {'close': preds, 'exchange': exchange_id,
-             'timestamp':  timestamps}
-            )
+             'timestamp':  timestamps}).to_csv(preds_path)
         preds_path = mfw.get_path(
             'preds', model_type, exchange_id, trading_pair, '.csv'
             )
         aws.upload_file(preds_path)
-        all_preds = pd.concat([all_preds, yo], axis=1)
-
-    return all_preds
