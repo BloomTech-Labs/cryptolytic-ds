@@ -255,9 +255,9 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
     response = requests.get(url)
     if response.status_code != 200:
         raise Exception(f"In function get_from_api, got bad response {response.status_code}. Exiting early.",
-                        f"Response Content: {response.content}")
+                f"Response Content: {response.content}")
 
-    # load and convert the candlestick info to be a common format
+        # load and convert the candlestick info to be a common format
     json_response = json.loads(response.content)
     candlestick_info = conform_json_response(api, json_response)
 
@@ -273,17 +273,17 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
 
     # return the candlestick information
     return dict(
-        api=api,
-        exchange=exchange,
-        candles=candles,
-        last_timestamp=current_timestamp,
-        trading_pair=trading_pair,
-        candles_collected=len(candles),
-        period=period)  # period in seconds
+            api=api,
+            exchange=exchange,
+            candles=candles,
+            last_timestamp=current_timestamp,
+            trading_pair=trading_pair,
+            candles_collected=len(candles),
+            period=period)  # period in seconds
 
 
-def yield_unique_pair(return_api=True):
-    """Yield unique trading pair (not including period information)"""
+    def yield_unique_pair(return_api=True):
+        """Yield unique trading pair (not including period information)"""
     api_iter = api_info.items()
     pairs = []
     for api, api_data in api_iter:
@@ -294,13 +294,13 @@ def yield_unique_pair(return_api=True):
                     pairs.append((api, exchange_id, trading_pair))
                 else:
                     if (exchange_id, trading_pair) not in pairs:
-                      pairs.append((exchange_id, trading_pair))
+                        pairs.append((exchange_id, trading_pair))
 
     return pairs
 
 
 def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
-                num_retries=0):
+        num_retries=0):
     """This functional inserts candlestick information into the database,
         called by live_update function. 
        Returns true if updated, or None if the task should be dropped"""
@@ -317,11 +317,11 @@ def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
 
     try:  # Get candle information
         candle_info = get_from_api(api=api,
-                                   exchange=exchange_id,
-                                   trading_pair=trading_pair,
-                                   start=timestamp,
-                                   period=period,
-                                   limit=limit)
+                exchange=exchange_id,
+                trading_pair=trading_pair,
+                start=timestamp,
+                period=period,
+                limit=limit)
     except Exception as e:
         print(f'Error encountered: {e}')
 
@@ -407,7 +407,7 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
 
     # Pull in data for the given trading pair at the given time on the given exchange
     df = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
-              'exchange_id': exchange_id}, n=n)
+        'exchange_id': exchange_id}, n=n)
 
     def price_increase(percent_diff, bottom5percent, top5percent):
         """Classify price changes into three types of categories"""
@@ -425,7 +425,7 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
 
         # Feature engineering
         df = ta.add_all_ta_features(df, open="open", high="high", low="low",
-                                    close="close", volume="volume").fillna(axis=1, value=0)
+                close="close", volume="volume").fillna(axis=1, value=0)
         df_shifted = df.shift(1,fill_value=0)
         df_diff = (df - df_shifted).rename(lambda x: x+'_diff', axis=1)
         df = pd.concat([df, df_diff], axis=1)
@@ -446,7 +446,7 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         mask =  df['arb_signal'].shift(1) < 0.01
         df['arb_signal_class'][mask] = -1
 
-        
+
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
         idx = np.isinf(dataset)
         dataset[idx] = 0

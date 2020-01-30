@@ -91,7 +91,10 @@ def cron_pred():
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + period * i for i in range(len(preds))]
-        yo = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
+        preds = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
+        preds.to_csv('data/preds.csv')
+        preds_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.csv')
+        aws.upload_file(preds_path)
         all_preds = pd.concat([all_preds, yo], axis=1)
 
     return all_preds
@@ -111,6 +114,7 @@ def cron_train():
     h.live_update()
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        print(exchange_id, trading_pair)
         # Loop until training on all the data want to train on or
         # if there is an error don't train
         start = int(now - params['ncandles'] * params['period'])
@@ -204,6 +208,7 @@ def xgb_cron_train(model_type):
 
     # Check for every unqiue trading pair in each exchange
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        print(exchange_id, trading_pair)
         # Loop until training on all the data want to train on or
         # if there is an error don't train
         start = int(now - params['ncandles'] * params['period'])
@@ -223,7 +228,7 @@ def xgb_cron_train(model_type):
                             )
 
         if df is None:
-            break
+            continue
 
         print(df)
 
@@ -233,7 +238,7 @@ def xgb_cron_train(model_type):
         print(df.shape, dataset.shape)
 
         # Find the x and y train and test data
-        x_train, y_train, x_test, y_test = xgmod.data_splice(df)
+        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
 
         # Create a model if not exists, else load model if it
         # not loaded
@@ -242,15 +247,12 @@ def xgb_cron_train(model_type):
         # if not os.path.exists(model_path):
         if True:
             if model_type == 'trade':
-                model = xgmod.create_model()
-
+                model = xtrade.create_model()
             elif model_type == 'arbitrage':
-                # model = xgmod.create_model()
-                pass
-            # model = # Model training/update functions here
+                model = xarb.create_model()
 
         # fit the model
-        model = xgmod.fit_model(model, x_train, y_train)
+        model = xtrade.fit_model(model, x_train, y_train)
         print(f'Saved model {model_path}')
         # model.save(model_path)
         pickle.dump(model, open(model_path, 'wb'))
@@ -270,7 +272,9 @@ def xgb_cron_pred(model_type='trade'):
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_path('neural', model_type, exchange_id, trading_pair, '.pkl')
+        print(exchange_id, trading_pair)
+      
+        model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.pkl')
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
@@ -306,11 +310,14 @@ def xgb_cron_pred(model_type='trade'):
             continue
 
 
+
         preds = model.predict(x_train)[:, 0][-params['lahead']]
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + period * i for i in range(len(preds))]
         yo = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
+        preds_path =   model_path = mfw.get_path('models', model_type, exchange_id, trading_pair, '.csv')
+        aws.upload_file(preds_path)
         all_preds = pd.concat([all_preds, yo], axis=1)
 
     return all_preds

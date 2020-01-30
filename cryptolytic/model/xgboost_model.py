@@ -93,28 +93,28 @@ def trade_model(df, params={}):
     # Get profit and loss
 
 
-def data_splice(df):
+def data_splice(dataset, target):
     '''
     Funciton splices data into x and y train and test
     Requires dataframe of data
     Returns x and y train and test
     '''
 
-    train_size = int(df.shape[0] * 0.8)
-    train = df.iloc[0:train_size]
-    test = df.iloc[train_size:]
+    train_size = int(dataset.shape[0] * 0.8)
+    train = dataset[0:train_size]
+    test = dataset[train_size:]
 
-    features = df.columns[0:50]  # first 50 columns as features for right now
+
     # Categorical target for the model to achieve
     # 1 = price increase
     # 0 = no price increase
     # 2 = price decrease # TODO Implemant this expanded category
-    target = 'price_increased'
+#    target = 'price_increased'
     # define X, y vectors
-    X_train = train[features]
-    X_test = test[features]
-    y_train = train[target]
-    y_test = test[target]
+    X_train = train[:, 0:50]
+    X_test = test[:, 0:50]
+    y_train = train[:, target]
+    y_test = test[:, target]
 
     return X_train, y_train, X_test, y_test
 
@@ -134,6 +134,8 @@ def create_model(params={}):
 
 
 def fit_model(model, x_train, y_train):
+    x_train.to_csv('x_train.csv')
+
     # Fit the given model with the x_train and y_train data
     model.fit(x_train, y_train)
     # Return the fitted model
