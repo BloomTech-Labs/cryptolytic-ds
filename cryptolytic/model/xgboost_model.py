@@ -134,8 +134,6 @@ def create_model(params={}):
 
 
 def fit_model(model, x_train, y_train):
-    x_train.to_csv('x_train.csv')
-
     # Fit the given model with the x_train and y_train data
     model.fit(x_train, y_train)
     # Return the fitted model

@@ -39,67 +39,6 @@ params = {
 
 
 
-def cron_pred():
-    """
-    - Loads model for the given unique trading pair, gets the latest data
-    availble for that trading pair complete with
-    """
-    init()
-    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
-
-    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.h5')
-        aws.download_file(model_path)
-        if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}')
-            continue
-
-        model = tf.keras.models.load_model(model_path)
-
-        n = params['history_size']+params['lahead']
-
-        df, dataset = h.get_latest_data(
-                          exchange_id, trading_pair,
-                          params['period'],
-                          # Pull history_size + lahead length, shouldn't need more to make a 
-                          # prediction
-                          n=n)
-
-        if df is None:
-            continue
-
-        target = df.columns.get_loc('close')
-
-        print(dataset.shape)
-
-        # Get the data in the same format that the model expects for its training
-        x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, target,
-            params['batch_size'], 
-            params['history_size'],
-            params['step'], 
-            lahead=0, # Zero look ahead, don't truncate any data for the prediction
-            ratio=1.0)
-
-
-        if x_train.shape[0] < n:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
-            continue
-
-
-        preds = model.predict(x_train)[:, 0][-params['lahead']]
-
-        last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + period * i for i in range(len(preds))]
-        preds = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
-        preds.to_csv('data/preds.csv')
-        preds_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.csv')
-        aws.upload_file(preds_path)
-        all_preds = pd.concat([all_preds, yo], axis=1)
-
-    return all_preds
-
-
 # TODO improve performance
 def cron_train():
     """
@@ -122,7 +61,8 @@ def cron_train():
         time_counter = start
         while True:
             gc.collect()
-            model_path = mfw.get_path('neural', exchange_id, trading_pair, '.h5')
+            model_path = mfw.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
+
 
             # model = tf.keras.load_model(path)
 
@@ -190,6 +130,65 @@ def cron_train():
             # Upload file to s3
             aws.upload_file(model_path)
 
+
+def cron_pred():
+    """
+    - Loads model for the given unique trading pair, gets the latest data
+    availble for that trading pair complete with
+    """
+    init()
+    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+
+    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        model_path = mfw.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
+        aws.download_file(model_path)
+        if not os.path.exists(model_path):
+            print(f'Model not available for {exchange_id}, {trading_pair}')
+            continue
+
+        model = tf.keras.models.load_model(model_path)
+
+        n = params['history_size']+params['lahead']
+
+        df, dataset = h.get_latest_data(
+                          exchange_id, trading_pair,
+                          params['period'],
+                          # Pull history_size + lahead length, shouldn't need more to make a 
+                          # prediction
+                          n=n)
+
+        if df is None:
+            continue
+
+        target = df.columns.get_loc('close')
+
+        print(dataset.shape)
+
+        # Get the data in the same format that the model expects for its training
+        x_train, y_train, x_val, y_val = dw.windowed(
+            dataset, target,
+            params['batch_size'], 
+            params['history_size'],
+            params['step'], 
+            lahead=0, # Zero look ahead, don't truncate any data for the prediction
+            ratio=1.0)
+
+
+        if x_train.shape[0] < n:
+            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
+            continue
+
+
+        preds = model.predict(x_train)[:, 0][-params['lahead']]
+
+        last_timestamp = df.timestamp[-1]
+        timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
+        preds = pd.DataFrame({'close': preds, 'exchange': exchange_id, 'timestamp':  timestamps})
+        preds_path = mfw.get_path('preds', 'neural', exchange_id, trading_pair, '.csv')
+        preds.to_csv(preds_path)
+        aws.upload_file(preds_path)
+
+
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
 
@@ -202,13 +201,15 @@ def xgb_cron_train(model_type):
     # Find the current time
     now = int(time.time())
     pull_size = 5000
-
+ 
     # Check for missing data, pull data from APIs if data is missing
     # h.live_update()
 
     # Check for every unqiue trading pair in each exchange
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
+        print('-'*15)
         print(exchange_id, trading_pair)
+        print('-'*15)
         # Loop until training on all the data want to train on or
         # if there is an error don't train
         start = int(now - params['ncandles'] * params['period'])
@@ -224,16 +225,18 @@ def xgb_cron_train(model_type):
                             exchange_id,
                             trading_pair,
                             params['period'],
-                            n=3000
-                            )
+                            n=3000)
 
         if df is None:
             continue
+       
+        if model_type == 'trade':
+            target = df.columns.get_loc('price_increased')
+        elif model_type == 'arbitrage':
+            target = df.columns.get_loc('arb_signal_class')
+
 
         print(df)
-
-        target = df.columns.get_loc('close')
-
         print(n)
         print(df.shape, dataset.shape)
 
