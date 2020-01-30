@@ -197,7 +197,7 @@ def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
     return model
 
 
-def get_pair_path(folder_name, model_type, exchange_id, trading_pair, ext):
+def get_path(folder_name, model_type, exchange_id, trading_pair, ext):
     """
     Example models/model_trade_binance_eth_usd.pkl
             preds/model_trade_binance_eth_usd.csv
