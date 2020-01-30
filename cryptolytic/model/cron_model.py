@@ -277,8 +277,6 @@ def xgb_cron_pred(model_type='trade'):
         df, dataset = h.get_latest_data(
                           exchange_id, trading_pair, 
                           params['period'], 
-                          # Pull history_size + lahead length, shouldn't need more to make a 
-                          # prediction
                           n=n)
 
         if df is None:
