@@ -7,6 +7,7 @@ import cryptolytic.data as d
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
 import cryptolytic.model.xgboost_model as xgmod
+import cryptolytic.data.aws as aws
 import pickle
 
 # tensorflow imports
@@ -20,7 +21,6 @@ import time
 from io import StringIO
 import gc
 
-bucket_name = 'crypto-buckit'
 
 
 params = {
@@ -34,23 +34,6 @@ params = {
 }
 
 
-def download_file(path):
-    """
-    Get file from s3
-    """
-    s3 = session.resource('s3')
-    s3_object = s3.Object(bucket_name=bucket_name, key=path)
-    return s3_object.download_file(path)
-
-
-def upload_file(path):
-    """
-    Put file on s3
-    """
-    s3 = session.client('s3')
-    return s3.upload_file(path, bucket_name, path)
-
-
 
 def cron_pred2():
     """
@@ -61,8 +44,8 @@ def cron_pred2():
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_model_path(exchange_id, trading_pair)
-        download_file(model_path)
+        model_path = mfw.get_model_path('neural', exchange_id, trading_pair, '.h5')
+        aws.download_file(model_path)
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
@@ -131,7 +114,7 @@ def cron_train2():
         time_counter = start
         while True:
             gc.collect()
-            model_path = mfw.get_model_path(exchange_id, trading_pair)
+            model_path = mfw.get_model_path('neural', exchange_id, trading_pair, '.h5')
 
             # model = tf.keras.load_model(path)
 
@@ -197,13 +180,13 @@ def cron_train2():
             print(f'Saved model {model_path}')
             model.save(model_path)
             # Upload file to s3
-            upload_file(model_path)
+            aws.upload_file(model_path)
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
 
 
-def xgb_cron_train():
+def xgb_cron_train(model_type):
 
     # Initialize the function and pull info from the .env file
     init()
@@ -223,7 +206,7 @@ def xgb_cron_train():
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_model_path(exchange_id, trading_pair, '.h5')
+        model_path = mfw.get_model_path(model, exchange_id, trading_pair, '.pkl')
 
         n = params['train_size']
 
@@ -265,16 +248,15 @@ def xgb_cron_train():
         model = xgmod.fit_model(model, x_train, y_train)
         print(f'Saved model {model_path}')
 #        model.save(model_path)
-        pickle.dump(model, open(model_path+'.pkl').format(
-                        model_name=model_name), 'wb')
+        pickle.dump(model, open(model_path), 'wb')
         # Upload file to s3
-        upload_file(model_path)
+        aws.upload_file(model_path)
 
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
 
-def xgb_cron_pred():
+def xgb_cron_pred(model_type='trade'):
     """
     - Loads model for the given unique trading pair, gets the latest data 
     availble for that trading pair complete with 
@@ -283,7 +265,7 @@ def xgb_cron_pred():
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_model_path(exchange_id, trading_pair, '.pkl')
+        model_path = mfw.get_model_path(model_type, exchange_id, trading_pair, '.pkl')
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}') 
             continue
