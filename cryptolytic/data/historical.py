@@ -282,8 +282,8 @@ def get_from_api(api='cryptowatch', exchange='binance', trading_pair='eth_btc',
             period=period)  # period in seconds
 
 
-    def yield_unique_pair(return_api=True):
-        """Yield unique trading pair (not including period information)"""
+def yield_unique_pair(return_api=True):
+    """Yield unique trading pair (not including period information)"""
     api_iter = api_info.items()
     pairs = []
     for api, api_data in api_iter:
@@ -455,10 +455,15 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         # Don't normalize columns which are percentages, check for some other things later
         # TODO check for infs and nans and maybe not normalize those features
         # , especially if that number is high.
+        # Also, categoricals should not be normalized.
         column = df.columns.get_loc('diff_percent')
         dataset[:, column] = df['diff_percent']
         column = df.columns.get_loc('arb_signal')
         dataset[:, column] = df['arb_signal']
+        column = df.columns.get_loc('arb_signal_class')
+        dataset[:, column] = df['arb_signal_class']
+        column = df.columns.get_loc('price_increased')
+        dataset[:, column] = df['price_increased']
         return df, dataset
 
     except Exception as e:
