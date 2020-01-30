@@ -38,7 +38,6 @@ params = {
 }
 
 
-
 def cron_pred():
     """
     - Loads model for the given unique trading pair, gets the latest data
