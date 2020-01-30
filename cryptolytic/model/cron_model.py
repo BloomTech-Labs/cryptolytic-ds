@@ -235,12 +235,12 @@ def xgb_cron_train(model_type):
         # not loaded
         model = None
         if not os.path.exists(model_path):
-            model_type = 'trade' # 'arbitrage'
+            model_type = 'trade'  # 'arbitrage'
             if model_type == 'trade':
                 model = xgmod.create_model()
 
             elif model_type == 'arbitrage':
-#                model = xgmod.create_model()
+                # model = xgmod.create_model()
                 pass
             # model = # Model training/update functions here
 
