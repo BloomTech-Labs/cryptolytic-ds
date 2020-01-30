@@ -342,10 +342,11 @@ def xgb_cron_pred(model_type='trade'):
         model_path = mfw.get_path(
             'models', model_type, exchange_id, trading_pair, '.pkl'
             )
-        if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}')
-            continue
 
+        aws.download_file(model_path)
+        if not os.path.exists(model_path):
+            print(f'File does not exist for {exchange_id}, {trading_pair} in function xgb_cron_pred')
+        print(model_path)
         model = pickle.load(open(model_path, 'rb'))
 
         n = params['history_size']+params['lahead']
@@ -365,7 +366,7 @@ def xgb_cron_pred(model_type='trade'):
 
         x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
         if x_train.shape[0] < n:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
+            print(f'Invalid shape {x_train.shape[0]} in function xgb_cron_pred')
             continue
 
         preds = model.predict(x_train)
@@ -373,7 +374,7 @@ def xgb_cron_pred(model_type='trade'):
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
         pd.DataFrame(
-            {'close': preds, 'exchange': exchange_id,
+            {'preds': preds, 'exchange': exchange_id,
              'timestamp':  timestamps}).to_csv(preds_path)
         preds_path = mfw.get_path(
             'preds', model_type, exchange_id, trading_pair, '.csv'
