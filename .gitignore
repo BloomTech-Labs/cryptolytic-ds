@@ -10,4 +10,5 @@ scratch.py
 test.env
 log.txt
 *.vim
+aws/
 models/*

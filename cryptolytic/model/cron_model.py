@@ -5,6 +5,8 @@ import cryptolytic.model.model_framework as model_framework
 import cryptolytic.model.data_work as dw
 import cryptolytic.data.historical as h
 import cryptolytic.data as d
+import cryptolytic.data.sql as sql
+
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
 import cryptolytic.model.xgboost_model as xgmod
@@ -38,67 +40,6 @@ params = {
 }
 
 
-def cron_pred():
-    """
-    - Loads model for the given unique trading pair, gets the latest data
-    availble for that trading pair complete with
-    """
-    init()
-    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
-
-    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.h5')
-        aws.download_file(model_path)
-        if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}')
-            continue
-
-        model = tf.keras.models.load_model(model_path)
-
-        n = params['history_size']+params['lahead']
-
-        df, dataset = h.get_latest_data(
-                          exchange_id, trading_pair,
-                          params['period'],
-                          # Pull history_size + lahead length, shouldn't need more to make a 
-                          # prediction
-                          n=n)
-
-        if df is None:
-            continue
-
-        target = df.columns.get_loc('close')
-
-        print(dataset.shape)
-
-        # Get the data in the same format that the model expects for its training
-        x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, target,
-            params['batch_size'], 
-            params['history_size'],
-            params['step'], 
-            lahead=0, # Zero look ahead, don't truncate any data for the prediction
-            ratio=1.0)
-
-
-        if x_train.shape[0] < n:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
-            continue
-
-
-        preds = model.predict(x_train)[:, 0][-params['lahead']]
-
-        last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + period * i for i in range(len(preds))]
-        preds = pd.DataFrame({'close': preds, 'api': api, 'exchange': exchange_id, 'timestamp':  timestamps})
-        preds.to_csv('data/preds.csv')
-        preds_path = mfw.get_path('neural', model_path, exchange_id, trading_pair, '.csv')
-        aws.upload_file(preds_path)
-        all_preds = pd.concat([all_preds, yo], axis=1)
-
-    return all_preds
-
-
 # TODO improve performance
 def cron_train():
     """
@@ -121,7 +62,7 @@ def cron_train():
         time_counter = start
         while True:
             gc.collect()
-            model_path = mfw.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
+            model_path = aws.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
 
 
             # model = tf.keras.load_model(path)
@@ -198,9 +139,10 @@ def cron_pred():
     """
     init()
     all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+    model_type = 'neural'
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = mfw.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
+        model_path = aws.get_path('models', model_type, exchange_id, trading_pair, '.h5')
         aws.download_file(model_path)
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}')
@@ -243,10 +185,19 @@ def cron_pred():
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
-        preds = pd.DataFrame({'close': preds, 'exchange': exchange_id, 'timestamp':  timestamps})
-        preds_path = mfw.get_path('preds', 'neural', exchange_id, trading_pair, '.csv')
-        preds.to_csv(preds_path)
-        aws.upload_file(preds_path)
+
+        preds = pd.DataFrame(
+            {'prediction': preds, 
+             'exchange': exchange_id,
+             'timestamp':  timestamps, 
+             'trading_pair' : trading_pair, 
+             'period': params['period'],
+             'model_type' : model_type
+             })
+        sql.add_data_to_table(preds, table='predictions')
+#        preds_path = aws.get_path('preds', model_type, exchange_id, trading_pair, '.csv')
+#        preds.to_csv(preds_path)
+#        aws.upload_file(preds_path)
 
 
 # be able to have model train on a large series of time without crashing
@@ -277,7 +228,7 @@ def xgb_cron_train(model_type):
         time_counter = start
 
         gc.collect()
-        model_path = mfw.get_path(
+        model_path = aws.get_path(
             'models', model_type, exchange_id, trading_pair, '.pkl')
 
 
@@ -329,7 +280,6 @@ def xgb_cron_train(model_type):
 
 # be able to have model train on a large series of time without crashing
 # split data into smaller batches
-
 def xgb_cron_pred(model_type='trade'):
     """
     - Loads model for the given unique trading pair, gets the latest data
@@ -339,7 +289,7 @@ def xgb_cron_pred(model_type='trade'):
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         print(exchange_id, trading_pair)
 
-        model_path = mfw.get_path(
+        model_path = aws.get_path(
             'models', model_type, exchange_id, trading_pair, '.pkl'
             )
         if not os.path.exists(model_path):
@@ -364,18 +314,21 @@ def xgb_cron_pred(model_type='trade'):
         print(dataset.shape)
 
         x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
-        if x_train.shape[0] < n:
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
-            continue
+    #    if x_train.shape[0] < n:
+    #        print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
+    #        continue
 
         preds = model.predict(x_train)
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
-        pd.DataFrame(
-            {'close': preds, 'exchange': exchange_id,
-             'timestamp':  timestamps}).to_csv(preds_path)
-        preds_path = mfw.get_path(
-            'preds', model_type, exchange_id, trading_pair, '.csv'
-            )
-        aws.upload_file(preds_path)
+
+        preds = pd.DataFrame(
+            {'prediction': preds, 
+             'exchange': exchange_id,
+             'timestamp':  timestamps, 
+             'trading_pair' : trading_pair, 
+             'period': params['period'],
+             'model_type' : model_type
+             })
+        sql.add_data_to_table(preds, table='predictions')
