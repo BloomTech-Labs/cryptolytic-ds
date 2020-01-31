@@ -1,2 +1,2 @@
 import os
-# session = None
+session = None
