@@ -43,7 +43,7 @@ def performance(X_test, y_preds):
     # calculate the percentage paid in fees
     fees_pct = number_of_entries * 2 * fee_rate/100
 
-    # calculate fees in USD 
+    # calculate fees in USD
     fees = number_of_entries * 2 * fee_rate / 100 * 10000
 
     # calculate net profit in USD

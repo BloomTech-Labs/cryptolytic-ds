@@ -300,9 +300,9 @@ def yield_unique_pair(return_api=True):
 
 
 def update_pair(api, exchange_id, trading_pair, timestamp, period=300,
-        num_retries=0):
+                num_retries=0):
     """This functional inserts candlestick information into the database,
-        called by live_update function. 
+        called by live_update function.
        Returns true if updated, or None if the task should be dropped"""
     # exit if num retries > 20
     if num_retries > 10:
@@ -395,7 +395,7 @@ def fill_missing_candles():
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
 
-# TODO should place this in the same file with get_df and get_df should probably 
+# TODO should place this in the same file with get_df and get_df should probably
 # be just impute_df and this shoudl candle sql.get_some_candles, pass that to impute_df,
 # and then also call feaure_engineer_df, instead.
 def get_data(exchange_id, trading_pair, period, start, n=8000):

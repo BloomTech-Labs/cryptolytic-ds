@@ -32,4 +32,4 @@ def get_path(folder_name, model_type, exchange_id, trading_pair, ext):
     aws_folder = os.path.join('aws', folder_name)
     if not os.path.exists(aws_folder):
         os.mkdir(aws_folder)
-    return os.path.join(aws_folder, f'model_{model_type}_{exchange_id}_{trading_pair}{ext}')
+    return os.path.join(aws_folder, f'model_{model_type}_{exchange_id}_{trading_pair}{ext}').replace('\\', '/')

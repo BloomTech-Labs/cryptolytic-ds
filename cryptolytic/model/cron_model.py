@@ -51,7 +51,7 @@ def cron_train():
     now = int(time.time())
     pull_size = 5000
 
-    h.live_update()
+    # h.live_update()
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         print(exchange_id, trading_pair)
@@ -99,11 +99,11 @@ def cron_train():
 
             # Get the data in the same format that the model expects for its training
             x_train, y_train, x_val, y_val = dw.windowed(
-                dataset, 
+                dataset,
                 target,
-                params['batch_size'], 
+                params['batch_size'],
                 params['history_size'],
-                params['step'], 
+                params['step'],
                 lahead=params['lahead'],
                 ratio=0.8)
 
@@ -143,7 +143,10 @@ def cron_pred():
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
         model_path = aws.get_path('models', model_type, exchange_id, trading_pair, '.h5')
-        aws.download_file(model_path)
+        try:
+            aws.download_file(model_path)
+        except Exception:
+            print(f'Model not available for {exchange_id}, {trading_pair}')
         if not os.path.exists(model_path):
             print(f'Model not available for {exchange_id}, {trading_pair}')
             continue
@@ -155,9 +158,9 @@ def cron_pred():
         df, dataset = h.get_latest_data(
                           exchange_id, trading_pair,
                           params['period'],
-                          # Pull history_size + lahead length, shouldn't need more to make a 
+                          # Pull history_size + lahead length, shouldn't need more to make a
                           # prediction
-                          n=n)
+                          n=15000)
 
         if df is None:
             continue
@@ -169,35 +172,34 @@ def cron_pred():
         # Get the data in the same format that the model expects for its training
         x_train, y_train, x_val, y_val = dw.windowed(
             dataset, target,
-            params['batch_size'], 
+            params['batch_size'],
             params['history_size'],
-            params['step'], 
-            lahead=0, # Zero look ahead, don't truncate any data for the prediction
+            params['step'],
+            lahead=0,  # Zero look ahead, don't truncate any data for the prediction
             ratio=1.0)
 
 
-        if x_train.shape[0] < n:
+        if x_train.shape[0] < (params['history_size']+params['step']):
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
             continue
 
-
-        preds = model.predict(x_train)[:, 0][-params['lahead']]
+        preds = model.predict(x_train)[:, 0][-params['lahead']:]
 
         last_timestamp = df.timestamp[-1]
         timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
 
         preds = pd.DataFrame(
-            {'prediction': preds, 
+            {'prediction': preds,
              'exchange': exchange_id,
-             'timestamp':  timestamps, 
-             'trading_pair' : trading_pair, 
+             'timestamp':  timestamps,
+             'trading_pair': trading_pair,
              'period': params['period'],
-             'model_type' : model_type
+             'model_type': model_type
              })
         sql.add_data_to_table(preds, table='predictions')
-#        preds_path = aws.get_path('preds', model_type, exchange_id, trading_pair, '.csv')
-#        preds.to_csv(preds_path)
-#        aws.upload_file(preds_path)
+        preds_path = aws.get_path('preds', model_type, exchange_id, trading_pair, '.csv')
+        preds.to_csv(preds_path)
+        aws.upload_file(preds_path)
 
 
 # be able to have model train on a large series of time without crashing
@@ -231,7 +233,6 @@ def xgb_cron_train(model_type):
         model_path = aws.get_path(
             'models', model_type, exchange_id, trading_pair, '.pkl')
 
-
         n = params['train_size']
 
         # train in batches of 3000
@@ -250,7 +251,7 @@ def xgb_cron_train(model_type):
             target = df.columns.get_loc('arb_signal_class')
 
         x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
-    
+
         print(df)
         print(n)
         print(df.shape, dataset.shape)
