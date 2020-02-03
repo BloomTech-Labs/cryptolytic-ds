@@ -30,7 +30,6 @@ from io import StringIO
 import gc
 
 
-
 params = {
         'history_size': 400,
         'lahead': 12*3,

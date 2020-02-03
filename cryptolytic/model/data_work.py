@@ -80,7 +80,7 @@ def windowed(dataset, target, batch_size, history_size,
     end = dataset.shape[0] - lahead  # 4990
     # 4990 - 1000 = 3990
     for i in range(start, end):
-        # grab rows from start y-history_size to  end 
+        # grab rows from start y-history_size to end
         indices = range(i-history_size, i, step)
         xs.append(x[indices])
         ys.append(y[i:i+lahead])
@@ -100,4 +100,3 @@ def windowed(dataset, target, batch_size, history_size,
     ys = ys[:total_size]
 
     return xs[:train_size], ys[:train_size], xs[train_size:], ys[train_size:]
-

@@ -10,7 +10,7 @@ import scipy.stats
 import os
 from kerastuner.tuners import RandomSearch
 
-#internal imports
+# internal imports
 import cryptolytic.data.historical as h
 import cryptolytic.model as m
 import cryptolytic.model.lstm_framework as lstm

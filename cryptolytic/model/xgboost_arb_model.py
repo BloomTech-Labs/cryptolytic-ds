@@ -25,4 +25,3 @@ def fit_model(model, x_train, y_train):
     model.fit(x_train, y_train)
     # Return the fitted model
     return model
-
