@@ -386,6 +386,10 @@ def live_update(period=300):  # Period default is 5 minutes
 
 
 def fill_missing_candles():
+    """
+    Looks for missing candlesticks and tries to fill those gaps by requesting 
+    that candle information
+    """
     missing = sql.get_missing_timesteps()
 
     for i, s in missing.iterrows():
@@ -395,20 +399,45 @@ def fill_missing_candles():
         update_pair(api, exchange, trading_pair, int(timestamp), int(period))
 
 
-# TODO should place this in the same file with get_df and get_df should probably 
-# be just impute_df and this shoudl candle sql.get_some_candles, pass that to impute_df,
-# and then also call feaure_engineer_df, instead.
-def get_data(exchange_id, trading_pair, period, start, n=8000):
+def impute_df(df):
     """
-    Get data for the given trading pair and perform feature engineering on that data
-    for usage in models. 
+    Finds the gaps in the time series data for the dataframe, and pulls the average market 
+    price and its last volume for those values and places those values into the gaps. Any remaining
+    gaps or new nan values are filled with backwards fill.
     """
-    print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
+    df = df.copy()
+    return df
+    # resample ohclv will reveal missing timestamps to impute
+    gapped = d.resample_ohlcv(df) 
+    gaps = d.nan_df(gapped).index
+    # stop psycopg2 error with int conversion
+    convert_datetime = compose(int, d.convert_datetime_to_timestamp)
+    timestamps = mapl(convert_datetime, list(gaps)) 
+    info = {'trading_pair': df['trading_pair'][0],
+            'period': int(df['period'][0]),
+            'exchange': df['exchange'][0],
+            'timestamps': timestamps}
 
-    # Pull in data for the given trading pair at the given time on the given exchange
-    df = d.get_df({'start': start, 'period': period, 'trading_pair': trading_pair,
-        'exchange_id': exchange_id}, n=n)
+    # impute information using this information from the database
+    if len(info['timestamps']) >= 2:
+        avgs = sql.batch_avg_candles(info)
+        volumes = sql.batch_last_volume_candles(info)
+        df = d.outer_merge(df, avgs)
+        df = d.outer_merge(df, volumes)
 
+    df = d.fix_df(df)
+    df['volume'] = df['volume'].ffill()
+    df = df.bfill().ffill()
+    assert df.isna().any().any() == False
+    return df
+
+
+def feature_engineer_df(df):
+    """
+    Feature engineer dataframe, returns the non-normalized dataframe with 
+    the added features and also a numpy array normalized version for use in
+    models.
+    """
     def price_increase(percent_diff, bottom5percent, top5percent):
         """Classify price changes into three types of categories"""
         if percent_diff > top5percent:
@@ -416,14 +445,17 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         elif percent_diff < bottom5percent:
             return -1
         return 0
-
     try:
+        # Sort and get numeric data
         df = df.sort_index()
+        df = df.reset_index()
         df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
         # filter out timestamp_ metrics
         df = df.filter(regex="(?!timestamp_.*)", axis=1)
 
         # Feature engineering
+        df['high_m_low'] = df['high'] - df['low']
+        df['close_m_open'] = df['close'] - df['open']
         df = ta.add_all_ta_features(df, open="open", high="high", low="low",
                 close="close", volume="volume").fillna(axis=1, value=0)
         df_shifted = df.shift(1,fill_value=0)
@@ -433,43 +465,64 @@ def get_data(exchange_id, trading_pair, period, start, n=8000):
         df = df.drop(['volume_adi'], axis=1)
 
         # Categorical feature for xgboost trading model 
-        bottom5percent = df['diff_percent'].quantile(0.05)
-        top5percent = df['diff_percent'].quantile(0.95)
-        df['price_increased'] = df['diff_percent'].apply(lambda x: price_increase(x, bottom5percent, top5percent))
+
+        df['price_increased'] = 0
+        mask = df['close'].shift(12) > df['close']
+        df.loc[df[mask].index, 'price_increased'] = 1
+        mask = df['close'].shift(12) < df['close']
+        df.loc[df[mask].index, 'price_increased'] = -1
 
         # Categorical feature for xgboost arbitrage model
         df['arb_signal_class'] = 0
-        # if the next candle is in positive arbitrage (1%), assign it the category 1
+        # if the next candle is in positive arbitrage (-1% difference from mean price for that trading pair), assign it the category 1
         mask =  df['arb_signal'].shift(1) > 0.01
-        df['arb_signal_class'][mask] = 1 
-        # if the next candle is in negative arbitrage (-1%), assign it the category -1
+        df.loc[df[mask].index, 'arb_signal_class'] = 1 
+        # if the next candle is in negative arbitrage (-1% difference from mean price for that trading pair), assign it the category -1
         mask =  df['arb_signal'].shift(1) < 0.01
-        df['arb_signal_class'][mask] = -1
+        df.loc[df[mask].index, 'arb_signal_class'] = -1
 
+        df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+        df = df.set_index('datetime')
 
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
         idx = np.isinf(dataset)
         dataset[idx] = 0
 
 
-        # Don't normalize columns which are percentages, check for some other things later
         # TODO check for infs and nans and maybe not normalize those features
         # , especially if that number is high.
-        # Also, categoricals should not be normalized.
-        column = df.columns.get_loc('diff_percent')
-        dataset[:, column] = df['diff_percent']
-        column = df.columns.get_loc('arb_signal')
-        dataset[:, column] = df['arb_signal']
-        column = df.columns.get_loc('arb_signal_class')
-        dataset[:, column] = df['arb_signal_class']
-        column = df.columns.get_loc('price_increased')
-        dataset[:, column] = df['price_increased']
+        # Don't normalize columns which are percentages, categoricals, etc.
+        columns = ['diff_percent', 'arb_signal', 'arb_signal_class', 'price_increased']
+        for col in columns:
+            i = df.columns.get_loc(col)
+            dataset[:, i] = df[col]
         return df, dataset
 
     except Exception as e:
         # Returns None None for tuple unpacking convineance
         print(f'Warning: Error in get_data: {e}')
         return None, None
+
+
+def get_data(exchange_id, trading_pair, period, start, n=8000):
+    """
+    Get data for the given trading pair and perform feature engineering on that data
+    for usage in models. 
+    """
+    print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
+    info = {'start': start,
+             'period': period,
+             'trading_pair': trading_pair,
+             'exchange_id': exchange_id}
+    
+    df = sql.get_some_candles(info=info, n=n, verbose=True)
+    df = impute_df(df)
+    dfarb = sql.get_arb_info(info=info, n=n)
+    df = d.merge_candle_dfs(df, dfarb)
+    assert df.isna().any().any() == False
+    df, dataset = feature_engineer_df(df)
+    return df, dataset
+
 
 
 def get_latest_data(exchange_id, trading_pair, period, n=8000):
@@ -480,3 +533,5 @@ def get_latest_data(exchange_id, trading_pair, period, n=8000):
     start = now - n*period
 
     return get_data(exchange_id, trading_pair, period, start,  n=n)
+
+

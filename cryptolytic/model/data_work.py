@@ -35,11 +35,11 @@ def thing(arg, axis=0):
 
 # normalization version 2
 def normalize(df):
+    df = df.copy()
     if isinstance(df, pd.DataFrame) or isinstance(df, pd.Series):
         df = df.values
     if np.ndim(df) == 1:
         df = np.expand_dims(df, axis=1)
-    df = df.copy()
     x, mu, std = thing(df, axis=0)
     for i in range(df.shape[1]):
         df[:, i] = (x[:, i] - mu[i]) / std[i]
@@ -75,9 +75,8 @@ def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.
     y = dataset[:, target]
 
     start = history_size  # 1000
-    end = dataset.shape[0] - lahead  # 4990
-    # 4990 - 1000 = 3990
-    for i in range(start, end):
+    train_end = dataset.shape[0] - lahead  # 4990
+    for i in range(start, train_end):
         # grab rows from start y-history_size to  end 
         indices = range(i-history_size, i, step)
         xs.append(x[indices])
@@ -96,6 +95,8 @@ def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.
     total_size = train_size + val_size
     xs = xs[:total_size]
     ys = ys[:total_size]
+
+    print(xs[:train_size].shape)
 
     return xs[:train_size], ys[:train_size], xs[train_size:], ys[train_size:]
 

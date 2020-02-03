@@ -1,6 +1,5 @@
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import cryptolytic.data.historical as h
 from cryptolytic.start import init
@@ -55,44 +54,6 @@ def performance(X_test, y_preds):
     return pct_performance, performance, fees, performance_net, performance_net_pct
 
 
-def trade_model(df, params={}):
-    # load data
-    max_depth = 17
-    max_features = 40
-
-    # get data with feature engineering
-    # check that the data is valid (no empty or small dataframes)
-    # train test split
-
-    train_size = int(df.shape[0] * 0.8)
-    train = df.iloc[0:train_size]
-    test = df.iloc[train_size:]
-
-    features = df.columns[0:50]  # first 50 columns as features for right now
-    target = 'price_increased'
-    # define X, y vectors
-    X_train = train[features]
-    X_test = test[features]
-    y_train = train[target]
-    y_test = test[target]
-
-    # Random forest classifier
-    model = RandomForestClassifier(max_features=max_features,
-                                   max_depth=max_depth,
-                                   n_estimators=100,
-                                   n_jobs=-1,
-                                   random_state=42)
-
-    model.fit(X_train, y_train)
-    train_score = model.score(X_train, y_train)
-    y_preds = model.predict(X_test)
-    score = accuracy_score(y_test, y_preds)
-
-    return y_preds, score
-
-    # Get profit and loss
-
-
 def data_splice(dataset, target):
     '''
     Funciton splices data into x and y train and test
@@ -139,6 +100,15 @@ def fit_model(model, x_train, y_train):
     # Return the fitted model
     return model
 
+# 
+#def predict(model, X):
+#    # Only go for 90% confidence predictions
+#    threshold = 0.9
+#
+#    predicted_proba = model.predict(X)
+#    predicted = (predicted_proba[:, 1] >= threshold).astype('int')
+#    return predicted
+
 
 def test_trade_model():
     init()
@@ -148,7 +118,6 @@ def test_trade_model():
     start = '03-01-2019'
 
     df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=8000)
-    preds, score = trade_model(df)
 
     print(score)
     print(preds)
@@ -158,8 +127,7 @@ def test_trade_model():
     period = 300
     start = '03-01-2019'
 
-    df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=8000)
-    preds, score = trade_model(df)
+    df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=15000)
 
     print(score)
     print(preds)

@@ -78,56 +78,6 @@ def fix_df(df):
     return df
 
 
-def impute_df(df):
-    """
-    Finds the gaps in the time series data for the dataframe, and pulls the average market 
-    price and its last volume for those values and places those values into the gaps. Any remaining
-    gaps or new nan values are filled with backwards fill.
-    """
-    df = df.copy()
-    return df
-    # resample ohclv will reveal missing timestamps to impute
-    gapped = resample_ohlcv(df) 
-    gaps = nan_df(gapped).index
-    # stop psycopg2 error with int conversion
-    convert_datetime = compose(int, convert_datetime_to_timestamp)
-    timestamps = mapl(convert_datetime, list(gaps)) 
-    info = {'trading_pair': df['trading_pair'][0],
-            'period': int(df['period'][0]),
-            'exchange': df['exchange'][0],
-            'timestamps': timestamps}
-
-    # impute information using this information from the database
-    if len(info['timestamps']) >= 2:
-        avgs = sql.batch_avg_candles(info)
-        volumes = sql.batch_last_volume_candles(info)
-        df = outer_merge(df, avgs)
-        df = outer_merge(df, volumes)
-
-    df = fix_df(df)
-    df['volume'] = df['volume'].ffill()
-    df = df.bfill().ffill()
-    assert df.isna().any().any() == False
-    return df
-
-
-def get_df(info, n=1000):
-    """
-    Pull info from database and give it some useful augmentation for analysis. 
-    TODO move functionality into get_data function in historical.
-    """
-    df = sql.get_some_candles(info=info, n=n, verbose=True)
-    df = impute_df(df)
-    
-    df['high_m_low'] = df['high'] - df['low']
-    df['close_m_open'] = df['close'] - df['open']
-    dfarb = sql.get_arb_info(info, n)
-
-    merged = merge_candle_dfs(df, dfarb)
-    assert merged.isna().any().any() == False
-    return merged
-
-
 def thing(arg, axis=0):
     x = np.sign(arg) * np.log(np.abs(arg) + 1)
     mu = np.nanmean(x, axis=axis)
