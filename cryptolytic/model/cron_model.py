@@ -1,5 +1,7 @@
 # begin inter imports
 from cryptolytic.start import init
+# init call early in imports so that cryptolytic.session imports correctly on
+# Windows operating systems
 init()
 import cryptolytic.model.model_framework as model_framework
 import cryptolytic.model.data_work as dw
@@ -62,8 +64,8 @@ def cron_train():
         time_counter = start
         while True:
             gc.collect()
-            model_path = aws.get_path('models', 'neural', exchange_id, trading_pair, '.h5')
-
+            model_path = aws.get_path('models', 'neural', exchange_id,
+                                      trading_pair, '.h5')
 
             # model = tf.keras.load_model(path)
 
@@ -86,7 +88,8 @@ def cron_train():
 
             # finished training for this
             if time_counter >= now - params['period']:
-                print('Finished training for  {api}, {exchange_id}, {trading_pair}')
+                print('Finished training for {api}, {exchange_id}, '
+                      '{trading_pair}')
                 break
 
             if df.shape[0] < params['history_size']:
@@ -97,7 +100,8 @@ def cron_train():
             print(n)
             print(df.shape, dataset.shape)
 
-            # Get the data in the same format that the model expects for its training
+            # Get the data in the same format that the
+            # model expects for its training
             x_train, y_train, x_val, y_val = dw.windowed(
                 dataset,
                 target,
@@ -112,7 +116,8 @@ def cron_train():
             print(x_val.shape)
             print(y_val.shape)
             if x_train.shape[0] < 10:
-                print(f'Invalid shape {x_train.shape[0]} in function cron_train')
+                print(f'Invalid shape {x_train.shape[0]} '
+                      'in function cron_train')
                 break
 
             # Create a model if not exists, else load model if it
@@ -138,11 +143,13 @@ def cron_pred():
     availble for that trading pair complete with
     """
     init()
-    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair', 'exchange_id', 'timestamp'])
+    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair',
+                                      'exchange_id', 'timestamp'])
     model_type = 'neural'
 
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = aws.get_path('models', model_type, exchange_id, trading_pair, '.h5')
+        model_path = aws.get_path('models', model_type, exchange_id,
+                                  trading_pair, '.h5')
         try:
             aws.download_file(model_path)
         except Exception:
@@ -158,8 +165,8 @@ def cron_pred():
         df, dataset = h.get_latest_data(
                           exchange_id, trading_pair,
                           params['period'],
-                          # Pull history_size + lahead length, shouldn't need more to make a
-                          # prediction
+                          # Pull history_size + lahead length,
+                          # shouldn't need more to make a prediction
                           n=15000)
 
         if df is None:
@@ -169,15 +176,16 @@ def cron_pred():
 
         print(dataset.shape)
 
-        # Get the data in the same format that the model expects for its training
+        # Get the data in the same format that the
+        # model expects for its training
         x_train, y_train, x_val, y_val = dw.windowed(
             dataset, target,
             params['batch_size'],
             params['history_size'],
             params['step'],
-            lahead=0,  # Zero look ahead, don't truncate any data for the prediction
+            # Zero look ahead, don't truncate any data for the prediction
+            lahead=0,
             ratio=1.0)
-
 
         if x_train.shape[0] < (params['history_size']+params['step']):
             print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
@@ -186,7 +194,8 @@ def cron_pred():
         preds = model.predict(x_train)[:, 0][-params['lahead']:]
 
         last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
+        timestamps = [last_timestamp + params['period']
+                      * i for i in range(len(preds))]
 
         preds = pd.DataFrame(
             {'prediction': preds,
@@ -197,7 +206,8 @@ def cron_pred():
              'model_type': model_type
              })
         sql.add_data_to_table(preds, table='predictions')
-        preds_path = aws.get_path('preds', model_type, exchange_id, trading_pair, '.csv')
+        preds_path = aws.get_path('preds', model_type, exchange_id,
+                                  trading_pair, '.csv')
         preds.to_csv(preds_path)
         aws.upload_file(preds_path)
 
@@ -296,7 +306,8 @@ def xgb_cron_pred(model_type='trade'):
 
         aws.download_file(model_path)
         if not os.path.exists(model_path):
-            print(f'File does not exist for {exchange_id}, {trading_pair} in function xgb_cron_pred')
+            print(f'File does not exist for {exchange_id}, {trading_pair} '
+                  'in function xgb_cron_pred')
         print(model_path)
         model = pickle.load(open(model_path, 'rb'))
 
@@ -323,14 +334,15 @@ def xgb_cron_pred(model_type='trade'):
         preds = model.predict(x_train)
 
         last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + params['period'] * i for i in range(len(preds))]
+        timestamps = [last_timestamp + params['period']
+                      * i for i in range(len(preds))]
 
         preds = pd.DataFrame(
-            {'prediction': preds, 
+            {'prediction': preds,
              'exchange': exchange_id,
-             'timestamp':  timestamps, 
-             'trading_pair' : trading_pair, 
+             'timestamp':  timestamps,
+             'trading_pair': trading_pair,
              'period': params['period'],
-             'model_type' : model_type
+             'model_type': model_type
              })
         sql.add_data_to_table(preds, table='predictions')
