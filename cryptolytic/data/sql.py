@@ -12,6 +12,7 @@ from itertools import repeat
 
 ohlc = ["open", "high", "low", "close"]
 
+
 def get_credentials():
     """Get the credentials for a psycopg2.connect"""
     return {
@@ -47,6 +48,7 @@ def safe_q1(q, args={}, return_conn=False):
     result = safe_q(q, args, return_conn).fetchone()
     if result is not None:
         return result[0]
+
 
 # like q1 but more appropriate in some cases
 def safe_q2(q, args={}, return_conn=False):
@@ -115,17 +117,18 @@ def get_table_columns(table_name):
 
 
 def add_data_to_table(df, cur=None, table='candlesticks'):
-    """Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method to insert the candlestick 
-        information (collected using functions in the historical file), into the 
-        database. 
+    """
+    Builds a string from our data-set using the mogrify method which is
+    then called once using the execute method to insert the candlestick
+    information (collected using functions in the historical file), into the
+    database.
     """
 
     order = get_table_columns(table)
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
     df = d.fix_df(df)
-    
+
     print(df.head())
     print(len(df))
     args_str = None
@@ -146,7 +149,8 @@ def add_data_to_table(df, cur=None, table='candlesticks'):
     except Exception as e:
         print('ERROR', e)
     try:
-        cur.execute(f"INSERT INTO {table} VALUES" + args_str + " on conflict do nothing;")
+        cur.execute(f"INSERT INTO {table} VALUES" + args_str +
+                    " on conflict do nothing;")
         if conn is not None:
             conn.commit()
     except ps.OperationalError as e:
@@ -156,7 +160,8 @@ def add_data_to_table(df, cur=None, table='candlesticks'):
 
 def candlestick_to_sql(data):
     """
-        Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
+    Inserts candlesticks data into database.
+    See get_from_api in data/historical.py for more info.
     """
 
     conn = ps.connect(**get_credentials())
@@ -172,18 +177,18 @@ def candlestick_to_sql(data):
 
 def get_latest_date(exchange_id, trading_pair, period):
     """
-        Return the latest date for a given trading pair on a given exchange
+    Return the latest date for a given trading pair on a given exchange
     """
     q = """
-        SELECT timestamp FROM candlesticks
-        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
-        ORDER BY timestamp desc
-        LIMIT 1;
+    SELECT timestamp FROM candlesticks
+    WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
+    ORDER BY timestamp desc
+    LIMIT 1;
     """
-    latest_date = safe_q1(q, {'exchange_id': exchange_id,
-        'trading_pair': trading_pair,
-        'period': period
-        })
+    latest_date = safe_q1(q,
+                          {'exchange_id': exchange_id,
+                           'trading_pair': trading_pair,
+                           'period': period})
     if latest_date is None:
         print('No latest date')
 
@@ -201,8 +206,8 @@ def get_earliest_date(exchange_id, trading_pair, period):
         LIMIT 1;
     """
     latest_date = safe_q1(q, {'exchange_id': exchange_id,
-        'trading_pair': trading_pair,
-        'period': period})
+                              'trading_pair': trading_pair,
+                              'period': period})
     if latest_date is None:
         print('No latest date')
 
@@ -211,16 +216,20 @@ def get_earliest_date(exchange_id, trading_pair, period):
 
 def get_some_candles(info, n=10000, verbose=False):
     """
-        Return n candles
-        info: can contain start (unix-timestamp or str), end, exchange_id, 
-            period (in seconds), trading_pair
-            Example: info={'start':1546300800, 'end':1546309800, 'exchange_id':'bitfinex',
-                           'trading_pair':'eth_btc', 'period':300}
+    Return n candles
+    info: can contain start (unix-timestamp or str), end, exchange_id,
+        period (in seconds), trading_pair
+        Example: info={'start':1546300800,
+                       'end':1546309800,
+                       'exchange_id':'bitfinex',
+                       'trading_pair':'eth_btc',
+                       'period':300}
     """
     n = min(n, 50000)  # no number larger than 50_000
-    select = "open, close, high, low, timestamp, volume" if not verbose else "*"
+    select = "open, close, high, low,"\
+        "timestamp, volume" if not verbose else "*"
     where = ''
-	
+
     if 'period' not in info.keys():
         info['period'] = 300
 
@@ -228,7 +237,7 @@ def get_some_candles(info, n=10000, verbose=False):
     if 'start' in info:
         info['start'] = date.convert_datetime(info['start'])
     if 'end' in info:
-        info['end'] = date.convert_datetime(info['end']) 
+        info['end'] = date.convert_datetime(info['end'])
 
     def add_clause(where, key, clause):
         if key in info.keys():
@@ -251,11 +260,14 @@ def get_some_candles(info, n=10000, verbose=False):
         LIMIT {n};
         """
     results = safe_qall(q, info)
-    columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
-    # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
-    df = pd.DataFrame(results, columns=columns)  
+    columns = get_table_columns('candlesticks') if select == "*" else \
+        ["open", "close", "high", "low", "timestamp", "volume"]
+    # TODO instead of returning a dataframe, return the query and then either
+    # convert to a dataframe (with get_candles) or to json
+    df = pd.DataFrame(results, columns=columns)
     df['period'] = info['period']
     return d.fix_df(df)
+
 
 def get_api(api):
     q = "SELECT * FROM candlesticks WHERE api = %(api)s"
@@ -273,17 +285,17 @@ def get_bad_timestamps(info):
 
 
 def remove_duplicates():
-    """ 
-        Remove any duplicate candlestick information from the database. 
+    """
+        Remove any duplicate candlestick information from the database.
     """
     q = """
         with q as (select *, "timestamp" - lag(timestamp, 1)
-                over (partition by(exchange, trading_pair, period) 
+                over (partition by(exchange, trading_pair, period)
                 order by "timestamp"
         ) as diff from candlesticks)
         delete from candlesticks
         where ctid in (
-                select ctid 
+                select ctid
                 from q
                 where diff=0
                 order by timestamp);
@@ -304,8 +316,9 @@ def get_missing_timesteps():
     """
     missing = safe_qall(q)
 
-    return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
-
+    return pd.DataFrame(missing, columns=[
+        "api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"
+        ])
 
 
 # Used for filling in missing candlestick values
@@ -314,9 +327,10 @@ def get_avg_candle(query):
     """Query to get avg price values for a candlestick at a certain timestamp.
        TODO batch query for improved performance."""
 
-    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
+    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.\
+        issubset(query.keys())
 
-    q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
+    q = """select avg("open"), avg(high), avg(low), avg("close") from candlesticks
             where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
     intermediate = safe_qall(q, query)
 
@@ -327,14 +341,16 @@ def get_avg_candle(query):
             where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
 ;    """
     ohlc = ["open", "high", "low", "close", "timestamp"]
-    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohlc)}
+    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)),
+                                                     ohlc)}
     result['volume'] = safe_q1(q2, query)
 
     return result
 
 
 def batch_avg_candles(info):
-    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
+    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.\
+        issubset(info.keys())
 
     assert len(info['timestamps']) >= 2
     info['timestamps'] = tuple(info['timestamps'])
@@ -346,15 +362,17 @@ def batch_avg_candles(info):
     """
 
     result = safe_qall(q, info)
-    df = pd.DataFrame(result, columns=['timestamp', 'open', 'high', 'low', 'close'])
+    df = pd.DataFrame(result, columns=['timestamp', 'open', 'high',
+                                       'low', 'close'])
     df[ohlc] = df[ohlc].apply(pd.to_numeric)
     return d.fix_df(df)
 
 
 def batch_last_volume_candles(info):
-    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
+    assert {'timestamps', 'trading_pair', 'period', 'exchange'}.\
+        issubset(info.keys())
     info_copy = info.copy()
-    # get the previous volumes, so minus the period, forward 
+    # get the previous volumes, so minus the period, forward
     # fills if this still has nans
     info['timestamps'] = mapl(lambda x: x-info['period'], info['timestamps'])
 
@@ -372,16 +390,18 @@ def batch_last_volume_candles(info):
     df = pd.DataFrame({'timestamp': info_copy['timestamps']})
     df = df.merge(volumes, how='left', on='timestamp')
     return d.fix_df(df.ffill().bfill())
-    
-
 
 
 def get_arb_info(info, n=1000):
     """
-    Example: info := {'start':1556668800, 'period':300, 'trading_pair':'eth_btc', 'exchange_id':'binance'}
+    Example: info := {'start':1556668800,
+                      'period':300,
+                      'trading_pair':'eth_btc',
+                      'exchange_id':'binance'}
     """
 
-    assert {'exchange_id', 'trading_pair', 'period', 'start'}.issubset(info.keys())
+    assert {'exchange_id', 'trading_pair', 'period', 'start'}.\
+        issubset(info.keys())
     info['n'] = n
 
     q = """with sub as (
@@ -403,8 +423,11 @@ def get_arb_info(info, n=1000):
 
     results = safe_qall(q, info)
     if results is not None:
-        # arb_signal is more interpretable than arb_diff but the signal is the same
-        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
+        # arb_signal is more interpretable than arb_diff
+        # but the signal is the same
+        df = pd.DataFrame(results, columns=["exchange", "trading_pair",
+                                            "timestamp", "period", "avg",
+                                            "arb_diff", "arb_signal"])
         return d.fix_df(df)
 
 
