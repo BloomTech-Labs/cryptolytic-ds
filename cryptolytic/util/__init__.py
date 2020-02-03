@@ -1,9 +1,10 @@
 import functools
 import signal
-import multiprocessing 
+import multiprocessing
 import pprint
 
 pprint = pprint.PrettyPrinter().pprint
+
 
 def timeout_handler(signum, frame):
     raise TimeoutError()
@@ -30,7 +31,7 @@ def timeout(fn, time, timeout_handler=None, success_handler=None):
                 success_handler()
     except Exception as e:
         print(e)
-        return 
+        return
 
 
 def bdir(x):
@@ -57,11 +58,14 @@ def first(x):
     if isinstance(x, list) or isinstance(x, tuple):
         return x[0]
 
+
 def dict_matches(cond, b):
     return set(cond.items()).issubset(set(b.items()))
 
+
 def select_keys(d, keys):
     return {k: d[k] for k in keys if k in d}
+
 
 class adict(dict):
     def __init__(self, *args, **kwargs):

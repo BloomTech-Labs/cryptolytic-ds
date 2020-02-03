@@ -1,6 +1,7 @@
 from datetime import datetime
 import time
 
+
 def convert_datetime(t):
     """Convert string to unix time stamp if not. Currently handles %d-%m-%Y
        Consider using something more convenient like the arrow library."""
