@@ -2,25 +2,26 @@ def get_higher_closing(df1, df2):
     # true if df is higher
     categories = (df1['close'] - df2['close'])
     print('something')
-#    categories = 
+#    categories =
+
 
 def get_higher_closing_test():
-    df1 = 
+    df1 =
 
 
 # function to create column showing percentage by which higher price is higher
 def get_pct_higher(df):
     # i.e., if exchange 1 has a higher closing price than exchange 2...
     if df['higher_closing_price'] == 1:
-        # return the percentage by which the exchange 1 closing price is 
+        # return the percentage by which the exchange 1 closing price is
         # greater than the exchange 2 closing price
-        return ((df['close_exchange_1'] / 
+        return ((df['close_exchange_1'] /
                  df['close_exchange_2'])-1)*100
     # otherwise, if exchange 2 has a higher closing price than exchange 1...
     elif df['higher_closing_price'] == 2:
         # return the percentage by which the exchange 2 closing price is
         # greater than the exchange 1 closing price
-        return ((df['close_exchange_2'] / 
+        return ((df['close_exchange_2'] /
                  df['close_exchange_1'])-1)*100
     # otherwise, i.e., if the closing prices are equivalent...
     else:
