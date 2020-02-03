@@ -22,6 +22,7 @@ import tensorflow.keras.models as models
 import tensorflow.keras.constraints as constraints
 import tensorflow.keras.regularizers as regularizers
 from tensorflow.keras.initializers import glorot_uniform, glorot_uniform
+from sklearn.metrics import confusion_matrix
 
 # sklearn imports
 from sklearn.preprocessing import MinMaxScaler
@@ -120,52 +121,21 @@ def predictions():
     return preds
 
 
-def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
-    epochs = 10
-    # batch size higher than 1 c  epochs = 10
-    for i in range(epochs):
-        model.fit(inputX,
-                  inputy,
-                  batch_size=batch_size,
-                  epochs=1,
-                  verbose=1,
-                  use_multiprocessing=True,
-                  shuffle=False,
-                  workers=4,
-                  validation_data=(x_val, y_val))
-        # history['loss'].append(model.history.history['loss'])
-        # history['val_loss'].append(model.history.history['val_loss'])
-#        model.reset_states()
-    # pred = transformer.denormalize(model.predict(x_val)[:, 0], df, 'close')
-    # pred_history.append(pred)
-
-    return model
-
-
-def get_model_path(api, exchange_id, trading_pair):
-    return f'models/model_{api}_{exchange_id}_{trading_pair}.h5'
-
-
-def load_all_models(folder):
-    models = []
-    params = []
-    path = f'models/{folder}'
-    for m in os.listdir(path):
-        if m.endswith('.csv'):
-            params.append(pd.read_csv(m))
-        if not m.endswith('.h5'):
-            continue
-        m = tf.keras.models.load_model(m)
-        models.append(m)
-        print('Loaded %s' % path)
-    return models, params
-
-
-def create_model(x_train, params):
+# https://towardsdatascience.com/types-of-convolutions-in-deep-learning-717013397f4d 
+# TODO try downsampling and then upsampling in the first part of the network
+# , can do downsampling by increasing stride or Pooling
+# dilation in a convolution will add spacing between values in a kernel,
+# so a 3x3 kernel with a dilation of 2 will have the same field view as 
+# 5x5 kernel, while only taking 9 parameters, so can get a wide field of view 
+# at low cost.
+# Transposed convolutions, sometimes called deconvolutions.
+# Can be used for upsampling the image, might need padding. 
+# Utilize skip connections into RNN and should improve model performance.
+def create_model(input_shape, params):
     batch_size = params['batch_size']
     lahead = params['lahead']
-    input_shape = x_train.shape[-2:]
-    X_input = Input(input_shape, batch_size=batch_size)
+#    input_shape = input_shape.shape[-2:]
+    X_input = Input(input_shape)
     X = X_input
     X = layers.ZeroPadding1D(padding=2)(X)
 #    X = layers.TimeDistributed(Dense(input_shape[-1],
@@ -203,6 +173,51 @@ def create_model(x_train, params):
     model.compile(loss='mse',
                   optimizer=tf.keras.optimizers.RMSprop(learning_rate=0.0001))
     return model
+
+
+def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
+    epochs = 10
+    # batch size higher than 1 c  epochs = 10
+    for i in range(epochs):
+        model.fit(inputX,
+                  inputy,
+#                  batch_size=batch_size,
+                  epochs=1,
+                  verbose=1,
+                  use_multiprocessing=True,
+                  shuffle=False,
+                  workers=4,
+                  validation_data=(x_val, y_val))
+        # history['loss'].append(model.history.history['loss'])
+        # history['val_loss'].append(model.history.history['val_loss'])
+#        model.reset_states()
+    # pred = transformer.denormalize(model.predict(x_val)[:, 0], df, 'close')
+    # pred_history.append(pred)
+
+    return model
+
+
+def get_path(folder_name, model_type, exchange_id, trading_pair, ext):
+    """
+    Example models/model_trade_binance_eth_usd.pkl
+            preds/model_trade_binance_eth_usd.csv
+    """
+    return f'{folder_name}/model_{model_type}_{exchange_id}_{trading_pair}{ext}'
+
+
+def load_all_models(folder):
+    models = []
+    params = []
+    path = f'models/{folder}'
+    for m in os.listdir(path):
+        if m.endswith('.csv'):
+            params.append(pd.read_csv(m))
+        if not m.endswith('.h5'):
+            continue
+        m = tf.keras.models.load_model(m)
+        models.append(m)
+        print('Loaded %s' % path)
+    return models, params
 
 
 def create_framework_lstm(x_train, lstm_output_dimensionality=1):

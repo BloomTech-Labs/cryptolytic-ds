@@ -114,13 +114,14 @@ def get_table_columns(table_name):
     return list(map(lambda x: x[0], results))
 
 
-def add_candle_data_to_table(df, cur):
-    """pply(
-        Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method
+def add_data_to_table(df, cur=None, table='candlesticks'):
+    """Builds a string from our data-set using the mogrify method which is
+        then called once using the execute method to insert the candlestick 
+        information (collected using functions in the historical file), into the 
+        database. 
     """
 
-    order = get_table_columns('candlesticks')
+    order = get_table_columns(table)
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
     df = d.fix_df(df)
@@ -128,6 +129,12 @@ def add_candle_data_to_table(df, cur):
     print(df.head())
     print(len(df))
     args_str = None
+
+    conn = None
+
+    if cur is None:
+        conn = ps.connect(**get_credentials())
+        cur = conn.cursor()
 
     try:
         x = [
@@ -139,7 +146,9 @@ def add_candle_data_to_table(df, cur):
     except Exception as e:
         print('ERROR', e)
     try:
-        cur.execute("INSERT INTO candlesticks VALUES" + args_str + " on conflict do nothing;")
+        cur.execute(f"INSERT INTO {table} VALUES" + args_str + " on conflict do nothing;")
+        if conn is not None:
+            conn.commit()
     except ps.OperationalError as e:
         sql_error(e)
         return
@@ -157,7 +166,7 @@ def candlestick_to_sql(data):
             ).drop(
                     ['candles', 'candles_collected', 'last_timestamp'],
                     axis=1)
-    add_candle_data_to_table(dfdata, cur)
+    add_data_to_table(dfdata, cur)
     conn.commit()
 
 
@@ -181,6 +190,23 @@ def get_latest_date(exchange_id, trading_pair, period):
     return latest_date
 
 
+def get_earliest_date(exchange_id, trading_pair, period):
+    """
+        Return the earliest date for a given trading pair on a given exchange
+    """
+    q = """
+        SELECT timestamp FROM candlesticks
+        WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
+        ORDER BY timestamp asc
+        LIMIT 1;
+    """
+    latest_date = safe_q1(q, {'exchange_id': exchange_id,
+        'trading_pair': trading_pair,
+        'period': period})
+    if latest_date is None:
+        print('No latest date')
+
+    return latest_date
 
 
 def get_some_candles(info, n=10000, verbose=False):
@@ -368,7 +394,7 @@ def get_arb_info(info, n=1000):
            group by (timestamp)
            )
 
-          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg"*100 as arb_signal from
+          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg" as arb_signal from
                  (sub inner join thing on sub.timestamp = thing.timestamp)
           where exchange=%(exchange_id)s
           order by thing.timestamp
@@ -381,6 +407,19 @@ def get_arb_info(info, n=1000):
         df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
         return d.fix_df(df)
 
-def create_pred_table():
-    
-    pass
+
+def create_predictions_table():
+    q = """CREATE TABLE predictions
+                (exchange text not null,
+                 model_type text not null,
+                 trading_pair text not null,
+                 timestamp bigint not null,
+                 period numeric not null,
+                 prediction text not null,
+                 primary key (model_type, exchange, trading_pair, timestamp, period)
+                 );"""
+
+    # imputed boolean not null default FALSE
+    conn, cur = safe_q(q, return_conn=True)
+    if conn is not None:
+        conn.commit()
