@@ -27,9 +27,12 @@ def denoise(signal, repeat):
 
 
 def resample_ohlcv(df, period=None):
-    """this function resamples ohlcv csvs for a specified candle interval; while
-       this can be used to change the candle interval for the data, it can also be
-       used to fill in gaps in the ohlcv data without changing the candle interval"""
+    """
+    this function resamples ohlcv csvs for a specified candle interval;
+    while this can be used to change the candle interval for the data,
+    it can also be used to fill in gaps in the ohlcv data without changing
+    the candle interval
+    """
     # dictionary specifying which columns to use for resampling
     ohlcv_dict = {'open': 'first',
                   'high': 'max',
@@ -38,7 +41,7 @@ def resample_ohlcv(df, period=None):
                   'volume': 'sum'}
 
     # apply resampling
-    if period==None:
+    if period is None:
         period = df['period'][0]
     period = pd.to_timedelta(period, unit='s')
     df_new = df.resample(period, how=ohlcv_dict)
@@ -52,8 +55,9 @@ def nan_df(df):
 
 def merge_candle_dfs(df1, df2):
     """Merge candle dataframes"""
-    merge_cols = ['trading_pair', 'exchange', 'period', 'datetime', 'timestamp']
-    df_merged = df1.merge(df2, how='inner', on=merge_cols) 
+    merge_cols = ['trading_pair', 'exchange',
+                  'period', 'datetime', 'timestamp']
+    df_merged = df1.merge(df2, how='inner', on=merge_cols)
     return df_merged
 
 
@@ -66,10 +70,14 @@ def outer_merge(df1, df2):
 
 
 def fix_df(df):
-    """Changes columns to the right type if needed and makes sure the index is set as the
-    datetime of the timestamp. Maybe better to have pandas infer numeric."""
+    """
+    Changes columns to the right type if needed and makes sure the index is
+    set as the datetime of the timestamp. Maybe better to have pandas
+    infer numeric.
+    """
     df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-    numeric = ['period', 'open', 'close', 'high', 'low', 'volume', 'arb_diff', 'arb_signal']
+    numeric = ['period', 'open', 'close', 'high', 'low', 'volume',
+               'arb_diff', 'arb_signal']
     for col in numeric:
         if col not in df.columns:
             continue
@@ -80,18 +88,19 @@ def fix_df(df):
 
 def impute_df(df):
     """
-    Finds the gaps in the time series data for the dataframe, and pulls the average market 
-    price and its last volume for those values and places those values into the gaps. Any remaining
-    gaps or new nan values are filled with backwards fill.
+    Finds the gaps in the time series data for the dataframe, and pulls the
+    average market price and its last volume for those values and places those
+    values into the gaps. Any remaining gaps or new nan values are filled
+    with backwards fill.
     """
     df = df.copy()
     return df
     # resample ohclv will reveal missing timestamps to impute
-    gapped = resample_ohlcv(df) 
+    gapped = resample_ohlcv(df)
     gaps = nan_df(gapped).index
     # stop psycopg2 error with int conversion
     convert_datetime = compose(int, convert_datetime_to_timestamp)
-    timestamps = mapl(convert_datetime, list(gaps)) 
+    timestamps = mapl(convert_datetime, list(gaps))
     info = {'trading_pair': df['trading_pair'][0],
             'period': int(df['period'][0]),
             'exchange': df['exchange'][0],
@@ -107,24 +116,24 @@ def impute_df(df):
     df = fix_df(df)
     df['volume'] = df['volume'].ffill()
     df = df.bfill().ffill()
-    assert df.isna().any().any() == False
+    assert df.isna().any().any() is False
     return df
 
 
 def get_df(info, n=1000):
     """
-    Pull info from database and give it some useful augmentation for analysis. 
+    Pull info from database and give it some useful augmentation for analysis.
     TODO move functionality into get_data function in historical.
     """
     df = sql.get_some_candles(info=info, n=n, verbose=True)
     df = impute_df(df)
-    
+
     df['high_m_low'] = df['high'] - df['low']
     df['close_m_open'] = df['close'] - df['open']
     dfarb = sql.get_arb_info(info, n)
 
     merged = merge_candle_dfs(df, dfarb)
-    assert merged.isna().any().any() == False
+    assert merged.isna().any().any() is False
     return merged
 
 
@@ -135,11 +144,11 @@ def thing(arg, axis=0):
     return x, mu, std
 
 
-# Version 2 
+# Version 2
 def normalize(A):
     if isinstance(A, pd.DataFrame) or isinstance(A, pd.Series):
         A = A.values
-    if np.ndim(A)==1:
+    if np.ndim(A) == 1:
         A = np.expand_dims(A, axis=1)
     A = A.copy()
     x, mu, std = thing(A, axis=0)
@@ -149,22 +158,24 @@ def normalize(A):
         # from sql
         A[:, i] = (x[:, i] - mu[i]) / std[i]
     return A
-   
+
 
 def denormalize(values, df, col=None):
-    """Denormalize, needs the original information to be able to denormalize."""
+    """
+    Denormalize, needs the original information to be able to denormalize.
+    """
     values = values.copy()
-    
+
     def eq(x, mu, std):
         return np.exp((x * std) + mu) - 1
-    
+
     if np.ndim(values) == 1 and col is not None:
         x, mu, std = thing(df[col])
         return eq(values, mu, std)
     else:
-        for i in range(values.shape[1]): 
+        for i in range(values.shape[1]):
             x, mu, std = thing(df.iloc[:, i])
-            if isinstance(values, pd.DataFrame): 
+            if isinstance(values, pd.DataFrame):
                 values.iloc[:, i] = eq(values.iloc[:, i], mu, std)
             else:
                 values[:, i] = eq(values[:, i], mu, std)
@@ -177,29 +188,30 @@ def windowed(df, target, batch_size, history_size, step, lahead=1, ratio=0.8):
     """
     xs = []
     ys = []
-    
+
     x = df
     y = df[:, target]
 
-    start = history_size # 1000
-    end = df.shape[0] - lahead # 4990
+    start = history_size  # 1000
+    end = df.shape[0] - lahead  # 4990
     # 4990 - 1000 = 3990
     for i in range(start, end):
         indices = range(i-history_size, i, step)
         xs.append(x[indices])
         ys.append(y[i:i+lahead])
-        
+
     xs = np.array(xs)
     ys = np.array(ys)
-    
+
     nrows = xs.shape[0]
     train_size = int(nrows * ratio)
-    # make sure the sizes are multiples of the batch size (needed for types of models)
+    # make sure the sizes are multiples of the batch size
+    # (needed for types of models)
     train_size -= train_size % batch_size
     val_size = nrows - train_size
-    val_size -= val_size  % batch_size
+    val_size -= val_size % batch_size
     total_size = train_size + val_size
     xs = xs[:total_size]
     ys = ys[:total_size]
-    
+
     return xs[:train_size], ys[:train_size], xs[train_size:], ys[train_size:]
