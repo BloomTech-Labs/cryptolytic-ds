@@ -14,7 +14,8 @@ from cryptolytic.util import *
 import tensorflow as tf
 from tensorflow.keras.preprocessing import sequence
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Dense, Embedding, Conv1D, Activation, Add, Input, LSTM
+from tensorflow.keras.layers import Dense, Embedding, Conv1D,\
+    Activation, Add, Input, LSTM
 import tensorflow.keras.layers as layers
 import tensorflow.keras.losses as losses
 import tensorflow.keras.models as models
@@ -67,7 +68,8 @@ def denormalize(values, df, col=None):
     return values
 
 
-def windowed(dataset, target, batch_size, history_size, step, lahead=1, ratio=0.8):
+def windowed(dataset, target, batch_size, history_size,
+             step, lahead=1, ratio=0.8):
     xs = []
     ys = []
 
