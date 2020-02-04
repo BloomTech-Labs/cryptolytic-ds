@@ -1,24 +1,41 @@
 {
   "cryptowatch": {
     "api_call": "https://api.cryptowat.ch/markets/{exchange}/{trading_pair}/ohlc?apikey={apikey}&periods={period}&after={start}",
-    "exchanges": {},
+    "exchanges": {
+		"gemini" : {
+				"trading_pairs" : [
+						"eth_btc",
+						"btc_usd"
+				]
+		},
+		"kraken" : {
+				"trading_pairs" : [
+						"eth_btc",
+						"btc_usd",
+						"bat_btc",
+						"link_eth",
+						"bch_btc",
+						"eos_usd"
+				]
+		}
+	},
     "timestamp_format": "seconds",
     "pair_no_underscore": true,
-    "candlestick_order": [
-      1,
-      2,
-      0,
-      3,
-      4
-    ]
+    "candlestick_order": [1, 2, 3, 4, 5, 0],
+	"comment" : "Looked up in environment variables",
+	"apikey" : "cryptowatch_secret_key"
   },
   "coincap": {
     "api_call": "http://api.coincap.io/v2/candles?exchange={exchange}&interval={interval}&baseId={baseId}&quoteId={quoteId}&start={start}&end={end}",
+	"slow":true,
     "exchanges": {
       "binance": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usdt"
+          "btc_usdt",
+		  "bat_btc",
+		  "link_eth",
+		  "bch_btc"
         ]
       }
     },
@@ -52,7 +69,9 @@
       "hitbtc": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "bat_btc",
+		  "eos_usd"
         ]
       }
     },
@@ -86,10 +105,16 @@
       "bitfinex": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "bat_btc",
+		  "bch_btc",
+		  "eos_usd"
         ]
-      }
+	  }
     },
+    "rename_pairs" : {
+		    "bch_btc" : "bab_btc"
+	}, 
     "limit": 5000,
     "timestamp_format": "milliseconds",
     "candle_timestamp_format": "milliseconds",
@@ -130,13 +155,18 @@
       "coinbase": {
         "trading_pairs": [
           "eth_btc",
-          "btc_usd"
+          "btc_usd",
+		  "link_eth",
+		  "bch_btc",
+		  "eos_usd"
         ]
       }
     },
     "timestamp_format": "iso8601",
     "pair_uppercase": true,
     "pair_dash_seperator": true,
+	"comment" : "Had issues with this api regarding rate limiting, won't use.",
+	"disabled" : true,
     "candlestick_order": [
       3,
       2,
@@ -148,8 +178,19 @@
     "limit": 300
   },
   "poloniex": {
+   "api_call" :"https://poloniex.com/public?command=returnChartData&currencyPair={trading_pair}&start={start}&end={end}&period={period}",
     "pair_uppercase": true,
-    "candlestick_no_conversion": true,
-    "exchanges": {}
+	"comment" : "Expects for example BTC_ETH instead of the other way around",
+	"pair_reverse" : true,
+    "exchanges": {
+		"poloniex" : {
+				"trading_pairs":[
+		          "eth_btc",
+				  "btc_usdt",
+				  "bat_btc",
+				  "eos_usdt"
+				]
+		}
+   }
   }
 }
