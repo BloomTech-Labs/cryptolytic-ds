@@ -55,6 +55,8 @@ Each trade recommender model recommends trades for a particular trading pair on 
 
 The arbitrage models predict arbitrage opportunities between two exchanges for a particular trading pair.  Predictions are made ten minutes in advance.  To count as an arbitrage opportunity, a price disparity between two exchanges must last for at least thirty minutes, and the disparity must be great enough to cover the costs of buying on one exchange and selling on the other.
 
+The models can also be accessed via the organization's AWS S3 bucket by the name of "crypto-buckit". Current code (as of 4 February 2020) will upload all future models into this S3 bucket.
+
 ### Features
 
 Each of the nine trade recommender models is trained on 67 features.  Of those 67 features, five are taken directly from the OHLCV data (open, high, low, close, base_volume), one indicates where gaps were present in the data (nan_ohlcv), three indicate the time (year, month, day), and the remainder are technical analysis features.
@@ -81,13 +83,21 @@ Documentation for the technical analysis features features is available here:
 
 We obtained all of our data from the Cryptowatch, Bitfinex, Coinbase Pro, and HitBTC APIs. Documentation for obtaining that data is listed below:
 
-[Cryptowatch API OHLCV Data Documentation](https://developer.cryptowat.ch/reference/rest-api-markets#market-ohlc-candlesticks)
+[Cryptowatch REST API OHLCV Data Documentation](https://docs.cryptowat.ch/rest-api/)
 
 [Bitfinex API OHLCV Data Documentation](https://docs.bitfinex.com/reference#rest-public-candles)
 
 [Coinbase Pro API OHLCV Data Documentation](https://docs.pro.coinbase.com/?r=1#get-historic-rates)
 
 [HitBTC OHLCV Data Documentation](https://api.hitbtc.com/#candles)
+
+[Binance API OHLCV Documentation](https://github.com/binance-exchange/binance-official-api-docs/blob/master/rest-api.md)
+
+[Gemini REST API OHLCV Data Documentation](https://docs.gemini.com/rest-api/)
+
+[Kraken REST API OHLCV Data Documentation](https://www.kraken.com/en-us/features/api)
+
+[Poloniex API OHLCV Data Documentation](https://docs.poloniex.com/#introduction)
 
 ### Python Notebooks
 
@@ -116,6 +126,11 @@ Returns: ``` {"results":"{
 {'p_time': 'time',
 'prediction': 'result'}
 ]} ```
+
+### Internal Access via AWS
+The raw data and models can also be internally accessed through the Organization's AWS accounts.
+-AWS RDS: RDS databases holds historical candlestick data from the cryptocurrency market APIs as well as the prediction from the models.
+-AWS S3: S3 buckets holds the pickled, trained models for both Trading and Arbitrage.
 
 
 ## Contributing
