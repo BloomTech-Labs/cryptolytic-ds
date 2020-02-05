@@ -43,25 +43,21 @@ Python, AWS, PostgreSQL, SQL, Flask
 
 ### Predictions
 
-The models folder contains two zip files, with a total of 30 models:
-
-tr_pickles.zip contains nine pickled trade recommender models.
-
-arb_models.zip contains 21 pickled arbitrage models.
-
-All 30 models use a RandomForestClassifier algorithm.
-
 Each trade recommender model recommends trades for a particular trading pair on a particular exchange by predicting whether the closing price will increase by enough to cover the costs of executing a trade.
 
-The arbitrage models predict arbitrage opportunities between two exchanges for a particular trading pair.  Predictions are made ten minutes in advance.  To count as an arbitrage opportunity, a price disparity between two exchanges must last for at least thirty minutes, and the disparity must be great enough to cover the costs of buying on one exchange and selling on the other.
+The arbitrage models predict arbitrage opportunities between two exchanges for a particular trading pair.  Predictions are made five minutes in advance. To count as an arbitrage opportunity, a price disparity between two exchanges must last for at least thirty minutes, and the disparity must be great enough to cover the costs of buying on one exchange and selling on the other.
 
-The models can also be accessed via the organization's AWS S3 bucket by the name of "crypto-buckit". Current code (as of 4 February 2020) will upload all future models into this S3 bucket.
+The trained and pickled models can be accessed via the organization's AWS S3 bucket by the name of "crypto-buckit" under folder aws/models. Current code (as of 4 February 2020) will upload all future models into this S3 bucket.
+
+The naming convetion for the models is model\_{arbitrage/trade}\_{api}\_{trading\_pair}.pkl
+
+The predictions themselves can be accessed via the Organization's AWS RDS database with the table name "predictions".
 
 ### Features
 
-Each of the nine trade recommender models is trained on 67 features.  Of those 67 features, five are taken directly from the OHLCV data (open, high, low, close, base_volume), one indicates where gaps were present in the data (nan_ohlcv), three indicate the time (year, month, day), and the remainder are technical analysis features.
+Each of the nine trade recommender models is trained on 80 features.  Of those 80 features, five are taken directly from the OHLCV data (open, high, low, close, base\_volume), and the remainder are technical analysis features. We are filling NaN values of open, high, low, close with the average price, and forward filling NaN values for base\_volume
 
-Each of the 21 arbitrage models is trained on 91 features.  Of those 91 features, three features indicate the time (year, month, day), and four indicate the degree and length of price disparities between two exchanges (higher_closing_price, pct_higher, arbitrage_opportunity, window_length).  Half of the remaining 84 features are specific to the first of the two exchanges in a given arbitrage dataset and are labelled with the suffix "exchange_1"; the other half are specific to the second of those two exchanges and are labelled with the suffix "exchange_2".  In each of these two sets of 42 features, two are taken directly from the OHLCV data (close_exchange_#, base_volume_exchange_#), one indicates where gaps were present in the data (nan_ohlcv), and the remainder are technical analysis features.
+Each of the arbitrage models is trained on 80 features.  Of those 80 features, and four indicate the degree and length of price disparities between two exchanges (higher_closing_price, pct_higher, arbitrage_opportunity, window_length).  Arbitrage is calculated by comparing the price of the primary exchange against the mean price of the other exchanges. This allows us to compare the market against every other market with minimal computation cost.
 
 Technical analysis features were engineered with the Technical Analysis Library; they fall into five types:
 
