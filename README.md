@@ -59,12 +59,12 @@ Each of the nine trade recommender models is trained on 80 features.  Of those 8
 
 Each of the arbitrage models is trained on 80 features.  Of those 80 features, and four indicate the degree and length of price disparities between two exchanges (higher_closing_price, pct_higher, arbitrage_opportunity, window_length).  Arbitrage is calculated by comparing the price of the primary exchange against the mean price of the other exchanges. This allows us to compare the market against every other market with minimal computation cost.
 
-Technical analysis features were engineered with the Technical Analysis Library; they fall into five types:
-(1) Momentum indicators
-(2) Volume indicators
-(3) Volatility indicators
-(4) Trend indicators
-(5) Others indicators
+Technical analysis features were engineered with the Technical Analysis Library; they fall into five types:<br/>
+(1) Momentum indicators<br/>
+(2) Volume indicators<br/>
+(3) Volatility indicators<br/>
+(4) Trend indicators<br/>
+(5) Others indicators<br/>
 
 Documentation for the technical analysis features features is available here:
 
