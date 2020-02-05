@@ -7,7 +7,10 @@ import cryptolytic.util.date as date
 import time
 import pandas as pd
 import json
+import numpy as np
 from itertools import repeat
+from psycopg2.extensions import register_adapter, AsIs
+ps.extensions.register_adapter(np.int64, ps._psycopg.AsIs)
 
 
 ohlc = ["open", "high", "low", "close"]
@@ -24,6 +27,7 @@ def get_credentials():
 
 
 def get_conn():
+    """Connect to postgres database, return connection and cursor"""
     conn = ps.connect(**get_credentials())
     cursor = conn.cursor()
     return conn, cursor
@@ -43,31 +47,31 @@ def safe_q(q,  args={}, return_conn=False):
         return
 
 
-def safe_q1(q, args={}, return_conn=False):
-    result = safe_q(q, args, return_conn).fetchone()
+def safe_q1(q, args={}):
+    """Safe q but return 1 result"""
+    result = safe_q(q, args, False).fetchone()
     if result is not None:
         return result[0]
 
+
 # like q1 but more appropriate in some cases
-def safe_q2(q, args={}, return_conn=False):
-    result = safe_q(q, args, return_conn).fetchone()
+def safe_q2(q, args={}):
+    result = safe_q(q, args, False).fetchone()
     return result
 
 
 def safe_qall(q, args={}, return_conn=False):
-    return safe_q(q, args, return_conn).fetchall()
+    return safe_q(q, args, False).fetchall()
 
 
 def sql_error(error):
-    """
-        Documentation: http://initd.org/psycopg/docs/errors.html
-    """
-    # TODO put into log or something
+    """Documentation: http://initd.org/psycopg/docs/errors.html"""
     print("SQL Error:")
     print(f"Error Code: {error.pgcode}\n")
 
 
 def check_tables():
+    """Query to show tables in database"""
     return safe_qall("""SELECT * FROM pg_catalog.pg_table
                       WHERE schemaname != 'pg_catalog'
                       AND schemaname != 'information_schema';""")
@@ -85,17 +89,9 @@ def create_candle_table():
                  high numeric not null,
                  low numeric not null,
                  volume numeric not null,
-                 primary key (exchange, trading_pair, timestamp, period)
-                 );"""
+                 primary key (exchange, trading_pair, timestamp, period));"""
 
-    # imputed boolean not null default FALSE
     conn, cur = safe_q(q, return_conn=True)
-    if conn is not None:
-        conn.commit()
-
-
-def drop_candle_table():
-    conn, cur = safe_q("DROP TABLE IF EXISTS candlesticks;", return_conn=True)
     if conn is not None:
         conn.commit()
 
@@ -106,74 +102,115 @@ def get_table_schema(table_name):
     return safe_qall(q, {'table_name': table_name})
 
 
-def get_table_columns(table_name):
-    q = """
-        select column_name
-        from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s;"""
+def get_table_columns(table_name, primary_only=False):
+    """Get the columns (or only the columns which are primary_keys with primary_only option) of the given table."""
+    if primary_only:
+        q = """
+            SELECT c.column_name, c.data_type
+            FROM information_schema.table_constraints tc 
+            JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
+            JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
+               AND tc.table_name = c.table_name AND ccu.column_name = c.column_name
+            WHERE constraint_type = 'PRIMARY KEY' and tc.table_name = %(table_name)s;"""
+    else:
+        q = """
+            select column_name
+            from INFORMATION_SCHEMA.COLUMNS where table_name = %(table_name)s;"""
+
     results = safe_qall(q, {'table_name': table_name})
     return list(map(lambda x: x[0], results))
 
 
-def add_data_to_table(df, cur=None, table='candlesticks'):
-    """Builds a string from our data-set using the mogrify method which is
-        then called once using the execute method to insert the candlestick 
-        information (collected using functions in the historical file), into the 
-        database. 
-    """
+def mogrified(df, table_name=None):
+    """Serialize values in a format that is fast for insertion into the given table."""
 
-    order = get_table_columns(table)
+    conn = ps.connect(**get_credentials())
+    cur = conn.cursor()
+    order = None
+    if table_name is not None:
+        order = get_table_columns(table_name)
+    else:   
+        order = df.columns
+
     n = len(order)
     query = "("+",".join(repeat("%s", n))+")"
-    df = d.fix_df(df)
-    
-    print(df.head())
-    print(len(df))
-    args_str = None
-
-    conn = None
-
-    if cur is None:
-        conn = ps.connect(**get_credentials())
-        cur = conn.cursor()
-
-    try:
+    try: 
         x = [
             str(
                 cur.mogrify(query, row), encoding='utf-8'
                 ) for row in df[order].values]
 
         args_str = ','.join(x)
+        return args_str
     except Exception as e:
-        print('ERROR', e)
-    try:
-        cur.execute(f"INSERT INTO {table} VALUES" + args_str + " on conflict do nothing;")
-        if conn is not None:
-            conn.commit()
-    except ps.OperationalError as e:
-        sql_error(e)
-        return
+        print(f'Error {e} oeua')
+
+# build a where clause conveniently
+def add_clause(where, clause):
+    if len(where) == 0:
+        where = "WHERE " + clause + " "
+    else:
+        where += "AND " + clause + " "
+    return where
+
+
+def upsert(df):
+    """Update with insert, creates a temporary table then uses that table to update, maybe not the best way."""
+
+    primary_columns = get_table_columns(table_name, primary_only=True)
+    columns = get_table_columns(table_name)
+    mogged = mogrified(df, table_name)
+    temp_table = "temporary_table"
+    where_clause = ""
+    view_table = f"{table_name}_view"
+
+    for column in primary_columns:
+        where_clause = add_clause(where_clause, f"{view_table}.{column} = {temp_table}.{column}")
+
+
+    new_columns = str(tuple(mapl(lambda x: f"{temp_table}."+x, columns))).replace("'", '')
+    columns = str(tuple(columns)).replace("'", '"')
+
+    # Update table by having a temporary table hold the values
+    q = f"""
+    create temp table if not exists {temp_table} as 
+        select * from {table_name} limit 0;
+    insert into {temp_table} values """ + mogged + ";" + \
+    f"""
+    create or replace view {view_table} as select * from {table_name};
+    update {view_table}
+    set {columns} = {new_columns}
+    from {temp_table}
+    {where_clause};
+    drop table {temp_table};
+    """
+
+    conn, cur = safe_q(q, {}, return_conn=True)
+    if conn is not None:
+        conn.commit()
+
+    # Did update for existing data, now insert any new data
+    q = f"insert into {table_name} values " + mogged + " on conflict do nothing;"
+    conn, cur = safe_q(q, {}, return_conn=True)
+    if conn is not None:
+        conn.commit()
 
 
 def candlestick_to_sql(data):
-    """
-        Inserts candlesticks data into database. See get_from_api in data/historical.py for more info.
-    """
+    """Inserts candlesticks data into database. See get_from_api in data/historical.py for more info."""
 
-    conn = ps.connect(**get_credentials())
-    cur = conn.cursor()
-    dfdata = pd.concat(
+    df = pd.concat(
             [pd.DataFrame(data['candles']), pd.DataFrame(data)], axis=1
             ).drop(
                     ['candles', 'candles_collected', 'last_timestamp'],
                     axis=1)
-    add_data_to_table(dfdata, cur)
-    conn.commit()
+
+    print(df.head())
+    upsert(df, "candlesticks")
 
 
 def get_latest_date(exchange_id, trading_pair, period):
-    """
-        Return the latest date for a given trading pair on a given exchange
-    """
+    """Return the latest date for a given trading pair on a given exchange"""
     q = """
         SELECT timestamp FROM candlesticks
         WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
@@ -191,9 +228,7 @@ def get_latest_date(exchange_id, trading_pair, period):
 
 
 def get_earliest_date(exchange_id, trading_pair, period):
-    """
-        Return the earliest date for a given trading pair on a given exchange
-    """
+    """Return the earliest date for a given trading pair on a given exchange"""
     q = """
         SELECT timestamp FROM candlesticks
         WHERE exchange=%(exchange_id)s AND trading_pair=%(trading_pair)s AND period=%(period)s
@@ -220,39 +255,40 @@ def get_some_candles(info, n=10000, verbose=False):
     n = min(n, 50000)  # no number larger than 50_000
     select = "open, close, high, low, timestamp, volume" if not verbose else "*"
     where = ''
-	
+    obt = 'order by "timestamp" desc'
+
     if 'period' not in info.keys():
         info['period'] = 300
 
     # make sure dates are of right format
     if 'start' in info:
         info['start'] = date.convert_datetime(info['start'])
+        where = add_clause(where, "timestamp >= %(start)s")
+        # if start is supplied, don't order by timestamp descending
+        obt = 'order by "timestamp" asc'
+        
     if 'end' in info:
         info['end'] = date.convert_datetime(info['end']) 
 
-    def add_clause(where, key, clause):
-        if key in info.keys():
-            if len(where) == 0:
-                where = "WHERE " + clause + " "
-            else:
-                where += "AND " + clause + " "
-        return where
+    if 'end' in info: where = add_clause(where, "timestamp <= %(end)s")
+    if 'period' in info: where = add_clause(where, "period = %(period)s")
+    if 'trading_pair' in info: where = add_clause(where, "trading_pair=%(trading_pair)s")
+    if 'exchange_id' in info: where = add_clause(where, "exchange=%(exchange_id)s")
 
-    where = add_clause(where, 'exchange_id', "exchange=%(exchange_id)s")
-    where = add_clause(where, 'start', "timestamp >= %(start)s")
-    where = add_clause(where, 'end', "timestamp <= %(end)s")
-    where = add_clause(where, 'period', "period = %(period)s")
-    where = add_clause(where, 'trading_pair', "trading_pair=%(trading_pair)s")
-
+    # If start is not supplied, will pull the latest n candles
     q = f"""
-        SELECT {select} FROM candlesticks
-        {where}
-        ORDER BY timestamp asc
-        LIMIT {n};
+        create or replace view thing2 as (
+            select {select} from candlesticks
+            {where}
+            {obt}
+            limit {n}
+        );
+        select * from thing2
+        order by "timestamp" asc;
         """
     results = safe_qall(q, info)
+    safe_q("drop view if exists thing2;")
     columns = get_table_columns('candlesticks') if select == "*" else ["open", "close", "high", "low", "timestamp", "volume"]
-    # TODO instead of returning a dataframe, return the query and then either convert to a dataframe (with get_candles) or to json
     df = pd.DataFrame(results, columns=columns)  
     df['period'] = info['period']
     return d.fix_df(df)
@@ -272,28 +308,6 @@ def get_bad_timestamps(info):
     return safe_qall(q, info)
 
 
-def remove_duplicates():
-    """ 
-        Remove any duplicate candlestick information from the database. 
-    """
-    q = """
-        with q as (select *, "timestamp" - lag(timestamp, 1)
-                over (partition by(exchange, trading_pair, period) 
-                order by "timestamp"
-        ) as diff from candlesticks)
-        delete from candlesticks
-        where ctid in (
-                select ctid 
-                from q
-                where diff=0
-                order by timestamp);
-            """
-
-    conn, curr = safe_q(q, return_conn=True)
-    if conn is not None:
-        conn.commit()
-
-
 def get_missing_timesteps():
     q = """
         select api, exchange, period, trading_pair, "timestamp",  "timestamp" + diff as ntimestamp
@@ -307,55 +321,45 @@ def get_missing_timesteps():
     return pd.DataFrame(missing, columns = ["api", "exchange", "period", "trading_pair", "timestamp", "ntimestamp"])
 
 
-
-# Used for filling in missing candlestick values
-# expects timestamp, trading_pair, and period
-def get_avg_candle(query):
-    """Query to get avg price values for a candlestick at a certain timestamp.
-       TODO batch query for improved performance."""
-
-    assert {'timestamp', 'trading_pair', 'period', 'exchange'}.issubset(query.keys())
-
-    q =  """select avg("open"), avg(high), avg(low), avg("close")  from candlesticks
-            where "timestamp"=%(timestamp)s and trading_pair=%(trading_pair)s and period=%(period)s;"""
-    intermediate = safe_qall(q, query)
-
-    # Query to get previous volume for the trading pair
-    q2 = """select prev_volume from (select *, lag(volume, 1) over
-            (partition by (exchange, trading_pair, period)
-            order by "timestamp") as prev_volume from candlesticks) q
-            where trading_pair=%(trading_pair)s and exchange=%(exchange)s and period=%(period)s and timestamp=%(timestamp)s
-;    """
-    ohlc = ["open", "high", "low", "close", "timestamp"]
-    result = {key: intermediate[i] for i, key in zip(range(len(intermediate)), ohlc)}
-    result['volume'] = safe_q1(q2, query)
-
-    return result
-
-
 def batch_avg_candles(info):
     assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
 
+    info = info.copy()
     assert len(info['timestamps']) >= 2
-    info['timestamps'] = tuple(info['timestamps'])
+    timestamp_df = pd.DataFrame({'timestamps': info['timestamps']})
 
-    q = """
-        select "timestamp", avg("open"), avg(high), avg(low), avg("close") from candlesticks
-        where timestamp in %(timestamps)s and trading_pair=%(trading_pair)s and period=%(period)s
-        group by timestamp;
-    """
+    info['timestamps'] = mogrified(timestamp_df)
+
+
+    q = f"""
+        drop table if exists thing2;
+
+        create or replace view something2 as(
+	    select * from candlesticks c
+        	where c.trading_pair = %(trading_pair)s  and c.period = %(period)s
+        );
+        create temp table thing2 as (
+                select * from 
+                (values {info['timestamps']}) as t (blah)
+                inner join something2 s on s.timestamp = t.blah);
+                        
+        select "timestamp", avg("open"), avg(high), avg(low), avg("close") from thing2
+        group by "timestamp";
+        """
 
     result = safe_qall(q, info)
     df = pd.DataFrame(result, columns=['timestamp', 'open', 'high', 'low', 'close'])
     df[ohlc] = df[ohlc].apply(pd.to_numeric)
-    return d.fix_df(df)
+    return d.fix_df(df).sort_index()
 
 
+# TODO redo to use the same logic as above
 def batch_last_volume_candles(info):
     assert {'timestamps', 'trading_pair', 'period', 'exchange'}.issubset(info.keys())
     info_copy = info.copy()
     # get the previous volumes, so minus the period, forward 
     # fills if this still has nans
+
     info['timestamps'] = mapl(lambda x: x-info['period'], info['timestamps'])
 
     assert len(info['timestamps']) >= 2
@@ -374,38 +378,17 @@ def batch_last_volume_candles(info):
     return d.fix_df(df.ffill().bfill())
     
 
-
-
-def get_arb_info(info, n=1000):
+def get_avg_close(info):
+    assert {'start', 'end', 'period', 'trading_pair'}.issubset(info)
+    q = """
+        select "timestamp", avg(close) from candlesticks
+        group by ("timestamp", "period", trading_pair)
+        having "timestamp" >= %(start)s and "timestamp" <= %(end)s and period=%(period)s and 
+            trading_pair=%(trading_pair)s;
     """
-    Example: info := {'start':1556668800, 'period':300, 'trading_pair':'eth_btc', 'exchange_id':'binance'}
-    """
-
-    assert {'exchange_id', 'trading_pair', 'period', 'start'}.issubset(info.keys())
-    info['n'] = n
-
-    q = """with sub as (
-           select * from candlesticks
-           where trading_pair=%(trading_pair)s and period=%(period)s and timestamp>=%(start)s
-           ),
-
-           thing as (
-           select "timestamp", avg(close) from  sub
-           group by (timestamp)
-           )
-
-          select exchange,trading_pair, thing.timestamp, "period", "avg", "close"-"avg" as arb_diff, ("close"-"avg")/"avg" as arb_signal from
-                 (sub inner join thing on sub.timestamp = thing.timestamp)
-          where exchange=%(exchange_id)s
-          order by thing.timestamp
-          limit %(n)s;
-    """
-
-    results = safe_qall(q, info)
-    if results is not None:
-        # arb_signal is more interpretable than arb_diff but the signal is the same
-        df = pd.DataFrame(results, columns=["exchange", "trading_pair", "timestamp", "period", "avg", "arb_diff", "arb_signal"])
-        return d.fix_df(df)
+    df = pd.DataFrame(safe_qall(q, info), columns=['timestamp', 'avg'])
+    df['avg'] = df['avg'].astype(float)
+    return df
 
 
 def create_predictions_table():

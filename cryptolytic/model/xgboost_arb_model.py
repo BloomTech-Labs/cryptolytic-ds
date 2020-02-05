@@ -9,7 +9,7 @@ from cryptolytic.start import init
 def create_model(params={}):
     # load data
     max_depth = 17
-    max_features = 70
+    max_features = 80
 
     # Random forest classifier
     model = RandomForestClassifier(max_features=max_features,

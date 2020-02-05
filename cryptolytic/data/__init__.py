@@ -46,13 +46,12 @@ def resample_ohlcv(df, period=None):
     return df_new
 
 
-def nan_df(df):
-    return df[df.isnull().any(axis=1)]
-
-
 def merge_candle_dfs(df1, df2):
     """Merge candle dataframes"""
     merge_cols = ['trading_pair', 'exchange', 'period', 'datetime', 'timestamp']
+
+    print(df1.head())
+    print(df2.head())
     df_merged = df1.merge(df2, how='inner', on=merge_cols) 
     return df_merged
 

@@ -406,30 +406,29 @@ def impute_df(df):
     gaps or new nan values are filled with backwards fill.
     """
     df = df.copy()
-    return df
     # resample ohclv will reveal missing timestamps to impute
     gapped = d.resample_ohlcv(df) 
-    gaps = d.nan_df(gapped).index
-    # stop psycopg2 error with int conversion
-    convert_datetime = compose(int, d.convert_datetime_to_timestamp)
-    timestamps = mapl(convert_datetime, list(gaps)) 
+    gaps = np.array(pd.to_datetime(gapped[gapped.isna().any(axis=1)].index).astype(int).values) // (10**9)
     info = {'trading_pair': df['trading_pair'][0],
             'period': int(df['period'][0]),
             'exchange': df['exchange'][0],
-            'timestamps': timestamps}
+            'timestamps': mapl(int, gaps)}
 
     # impute information using this information from the database
     if len(info['timestamps']) >= 2:
-        avgs = sql.batch_avg_candles(info)
-        volumes = sql.batch_last_volume_candles(info)
+        print(df.columns)
+        avgs = sql.batch_avg_candles(info).sort_index()
+#        gapped['timestamps'] = 
         df = d.outer_merge(df, avgs)
-        df = d.outer_merge(df, volumes)
+#        volumes = sql.batch_last_volume_candles(info)
+#        df = d.outer_merge(df, volumes)
 
     df = d.fix_df(df)
-    df['volume'] = df['volume'].ffill()
+    df['volume'].fillna(0, inplace=True)
+#    df['volume'] = df['volume'].ffill()
     df = df.bfill().ffill()
     assert df.isna().any().any() == False
-    return df
+    return df.sort_index()
 
 
 def feature_engineer_df(df):
@@ -438,100 +437,158 @@ def feature_engineer_df(df):
     the added features and also a numpy array normalized version for use in
     models.
     """
-    def price_increase(percent_diff, bottom5percent, top5percent):
-        """Classify price changes into three types of categories"""
-        if percent_diff > top5percent:
-            return 1
-        elif percent_diff < bottom5percent:
-            return -1
-        return 0
     try:
         # Sort and get numeric data
         df = df.sort_index()
         df = df.reset_index()
         df = df._get_numeric_data().drop(["period"], axis=1, errors='ignore')
-        # filter out timestamp_ metrics
-        df = df.filter(regex="(?!timestamp_.*)", axis=1)
+        # filter out timestamp metrics
+        timestamp = df['timestamp']
 
         # Feature engineering
         df['high_m_low'] = df['high'] - df['low']
         df['close_m_open'] = df['close'] - df['open']
         df = ta.add_all_ta_features(df, open="open", high="high", low="low",
                 close="close", volume="volume").fillna(axis=1, value=0)
-        df_shifted = df.shift(1,fill_value=0)
-        df_diff = (df - df_shifted).rename(lambda x: x+'_diff', axis=1)
+        df = df.filter(regex="(?!timestamp.*)", axis=1)
+        df_shifted = df.shift(-1,fill_value=0)
+        df_diff = (df_shifted - df).rename(lambda x: x+'_diff', axis=1)
         df = pd.concat([df, df_diff], axis=1)
         df['diff_percent'] = df['close'].pct_change(1).fillna(0)
         df = df.drop(['volume_adi'], axis=1)
-
-        # Categorical feature for xgboost trading model 
-
-        df['price_increased'] = 0
-        mask = df['close'].shift(12) > df['close']
-        df.loc[df[mask].index, 'price_increased'] = 1
-        mask = df['close'].shift(12) < df['close']
-        df.loc[df[mask].index, 'price_increased'] = -1
-
-        # Categorical feature for xgboost arbitrage model
-        df['arb_signal_class'] = 0
-        # if the next candle is in positive arbitrage (-1% difference from mean price for that trading pair), assign it the category 1
-        mask =  df['arb_signal'].shift(1) > 0.01
-        df.loc[df[mask].index, 'arb_signal_class'] = 1 
-        # if the next candle is in negative arbitrage (-1% difference from mean price for that trading pair), assign it the category -1
-        mask =  df['arb_signal'].shift(1) < 0.01
-        df.loc[df[mask].index, 'arb_signal_class'] = -1
-
-        df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
-        df = df.set_index('datetime')
-
+      
         dataset = np.nan_to_num(dw.normalize(df.values), nan=0)
         idx = np.isinf(dataset)
         dataset[idx] = 0
-
+    
+        df['datetime'] = pd.to_datetime(timestamp, unit='s')
+        df = df.set_index('datetime')
 
         # TODO check for infs and nans and maybe not normalize those features
         # , especially if that number is high.
         # Don't normalize columns which are percentages, categoricals, etc.
-        columns = ['diff_percent', 'arb_signal', 'arb_signal_class', 'price_increased']
+        columns = ['diff_percent', 'arb_signal']
         for col in columns:
             i = df.columns.get_loc(col)
             dataset[:, i] = df[col]
+
         return df, dataset
 
     except Exception as e:
-        # Returns None None for tuple unpacking convineance
+        # Returns None None None for tuple unpacking convineance
         print(f'Warning: Error in get_data: {e}')
         return None, None
 
+# Could probably put this in the Model itself rather than having
+# this seperate function
+def createXY(df, dataset, Model):
+    # Categorical features for xgboost trading Models 
+    X = dataset
+    y = None
+    if Model.Type == 'trade' or Model.Type == 'arbitrage':
+        y = pd.Series(range(len(df)))
+        y.index = df.index
+        y[:] = 0
 
-def get_data(exchange_id, trading_pair, period, start, n=8000):
+    if Model.Type=='trade':
+        mask = (df['close'].shift(-12) - df['close']) > 0
+        y.loc[y[mask].index] = 1
+        mask = (df['close'].shift(-12) - df['close']) < 0
+        (df['close'].shift(12) < df['close']).shift(-12).fillna(False)
+        y.loc[y[mask].index] = -1
+
+        # exclude the lahead steps from y
+        y = y[:-Model.lahead]
+
+    elif Model.Type=='arbitrage':
+        # Categorical feature for xgboost arbitrage Model
+        # if the next candle is in positive arbitrage (1% difference from mean price 
+        #   for that trading pair), assign it the category 1, else, assign it to category -1
+
+        mask =  df['arb_signal'].shift(-12) > 0.01 
+        y.loc[y[mask].index] = 1 
+        mask =  df['arb_signal'].shift(-12) < -0.01 
+        y.loc[y[mask].index] = -1
+        
+        # exclude the lahead steps from y
+        y = y[:-Model.lahead]
+
+    elif Model.Type=='neural':
+        target = df.columns.get_loc('close')
+        X, y, _, _ = dw.windowed(
+            dataset,
+            target,
+            Model.batch_size,
+            Model.history_size,
+            Model.step,
+            lahead=Model.lahead,
+            ratio=0.8)
+
+    if Model.feature_size != -1:
+        X = X[:, 0:Model.feature_size]
+
+    return X, y
+
+
+
+
+def get_data(exchange_id, trading_pair, period, Model, start, n=8000):
     """
     Get data for the given trading pair and perform feature engineering on that data
     for usage in models. 
     """
     print(mapl(lambda x: type(x), [exchange_id, trading_pair, period, start, n]))
-    info = {'start': start,
-             'period': period,
-             'trading_pair': trading_pair,
-             'exchange_id': exchange_id}
-    
+
+    # TODO calculate end 
+    info = {'period': period,
+            'trading_pair': trading_pair,
+            'exchange_id': exchange_id, 
+            'start': start}
+
+    if start is not None:
+        start = date.convert_datetime(start)
+        info['start'] = start
+        info['end'] = start + period*n
+
     df = sql.get_some_candles(info=info, n=n, verbose=True)
+
+    if df is None:
+        print(f'No retrieved information {exchange_id} {trading_pair} start: {start}')
+        return None, None, None
+#     elif df.shape[0] < 1000:
+#         print(f'Too little information to perform feature engineering {exchange_id} {trading_pair} start: {start}')
+#         return None, None, None
+ 
+    info['start'] = int(df.timestamp[0])
+    print(f"Pulled {df.shape}, {info['start']}, {n}")
+    
     df = impute_df(df)
-    dfarb = sql.get_arb_info(info=info, n=n)
-    df = d.merge_candle_dfs(df, dfarb)
+    
+    info['start'] = df.timestamp[0]
+    info['end'] = df.timestamp[-1]
+    avgs = sql.get_avg_close(info)
+
+    df['avg'] = 0.0
+    avgs['datetime'] = pd.to_datetime(avgs['timestamp'], unit='s')
+    avgs = avgs.set_index('datetime')
+
+    # sometimes for some coins might not be any average information 
+
+    # df['avg'].loc[df.index.intersection(avgs.index)] = avgs['avg'].values
+    idx = filterl(lambda x: x in df.index, avgs.index)
+    df.loc[idx, 'avg'] = avgs['avg']
+
+
+
+
+#    df.loc[avgs.index == df.index, 'avg'] = avgs['avg'].values
+    print(df.head())
+
+    df['arb_diff'] = df['close'] - df['avg']
+    df['arb_signal'] = df['arb_diff'] / (df['avg'])
+
     assert df.isna().any().any() == False
     df, dataset = feature_engineer_df(df)
-    return df, dataset
-
-
-
-def get_latest_data(exchange_id, trading_pair, period, n=8000):
-    """
-    Get data for the given trading pair and perform feature engineering on that data for the latest date
-    """
-    now = int(time.time())
-    start = now - n*period
-
-    return get_data(exchange_id, trading_pair, period, start,  n=n)
-
-
+    print('oeuaue', df.shape, dataset.shape)
+    X, y = createXY(df, dataset, Model)
+    return df, X, y

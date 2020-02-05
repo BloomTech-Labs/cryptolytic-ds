@@ -54,36 +54,10 @@ def performance(X_test, y_preds):
     return pct_performance, performance, fees, performance_net, performance_net_pct
 
 
-def data_splice(dataset, target):
-    '''
-    Funciton splices data into x and y train and test
-    Requires dataframe of data
-    Returns x and y train and test
-    '''
-
-    train_size = int(dataset.shape[0] * 0.8)
-    train = dataset[0:train_size]
-    test = dataset[train_size:]
-
-
-    # Categorical target for the model to achieve
-    # 1 = price increase
-    # 0 = no price increase
-    # 2 = price decrease # TODO Implemant this expanded category
-#    target = 'price_increased'
-    # define X, y vectors
-    X_train = train[:, 0:80]
-    X_test = test[:, 0:80]
-    y_train = train[:, target]
-    y_test = test[:, target]
-
-    return X_train, y_train, X_test, y_test
-
-
 def create_model(params={}):
     # load data
     max_depth = 17
-    max_features = 70
+    max_features = 80
 
     # Random forest classifier
     model = RandomForestClassifier(max_features=max_features,
@@ -117,17 +91,17 @@ def test_trade_model():
     period = 300
     start = '03-01-2019'
 
-    df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=8000)
+    df, X, y = h.get_data(exchange_id, trading_pair, period, start, n=8000)
 
     print(score)
     print(preds)
 
-    exchange_id = 'hitbtc'
-    trading_pair = 'btc_usd'
+    exchange_id = 'kraken'
+    trading_pair = 'bat_btc'
     period = 300
-    start = '03-01-2019'
+    start = '06-01-2019'
 
-    df, dataset = h.get_data(exchange_id, trading_pair, period, start, n=15000)
+    df, X, y = h.get_data(exchange_id, trading_pair, period, start, n=15000)
 
     print(score)
     print(preds)

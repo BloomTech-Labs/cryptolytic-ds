@@ -131,11 +131,11 @@ def predictions():
 # Transposed convolutions, sometimes called deconvolutions.
 # Can be used for upsampling the image, might need padding. 
 # Utilize skip connections into RNN and should improve model performance.
-def create_model(input_shape, params):
+def create_model(X, params):
     batch_size = params['batch_size']
     lahead = params['lahead']
 #    input_shape = input_shape.shape[-2:]
-    X_input = Input(input_shape)
+    X_input = Input(X.shape[-2:])
     X = X_input
     X = layers.ZeroPadding1D(padding=2)(X)
 #    X = layers.TimeDistributed(Dense(input_shape[-1],
@@ -175,19 +175,20 @@ def create_model(input_shape, params):
     return model
 
 
-def fit_model(model, inputX, inputy, x_val, y_val, batch_size=200):
+def fit_model(model, X, y, x_val=None, y_val=None, params={}):
     epochs = 10
     # batch size higher than 1 c  epochs = 10
     for i in range(epochs):
-        model.fit(inputX,
-                  inputy,
+        model.fit(X,
+                  y,
 #                  batch_size=batch_size,
                   epochs=1,
                   verbose=1,
                   use_multiprocessing=True,
                   shuffle=False,
-                  workers=4,
-                  validation_data=(x_val, y_val))
+                  workers=4)
+        #          validation_data=(x_val, y_val))
+
         # history['loss'].append(model.history.history['loss'])
         # history['val_loss'].append(model.history.history['val_loss'])
 #        model.reset_states()

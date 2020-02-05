@@ -3,12 +3,12 @@ from cryptolytic.start import init
 # init call early in imports so that cryptolytic.session imports correctly on
 # Windows operating systems
 init()
+from cryptolytic.util import *
 import cryptolytic.model.model_framework as model_framework
 import cryptolytic.model.data_work as dw
 import cryptolytic.data.historical as h
 import cryptolytic.data as d
 import cryptolytic.data.sql as sql
-​
 import cryptolytic.model.model_framework as mfw
 from cryptolytic import session
 import cryptolytic.model.xgboost_model as xgmod
@@ -16,11 +16,8 @@ import cryptolytic.data.aws as aws
 import cryptolytic.model.xgboost_model as xtrade
 import cryptolytic.model.xgboost_arb_model as xarb
 import pickle
-​
-​
 # tensorflow imports
 import tensorflow as tf
-​
 # begin general external imports
 import os
 import ta
@@ -28,8 +25,8 @@ import pandas as pd
 import time
 from io import StringIO
 import gc
-​
-​
+
+# TODO try maybe only use period from here
 params = {
         'history_size': 400,
         'lahead': 12*3,
@@ -37,311 +34,241 @@ params = {
         'period': 300,
         'batch_size': 200,
         'train_size': 10000,
-        'ncandles': 5000
 }
-​
-​
-# TODO improve performance
-def cron_train():
-    """
-    - Loads model for the given unique trading pair, gets the latest data
-    availble for that trading pair complete with
-    """
+
+now = int(time.time())
+_3months = 7890000
+period = 300
+
+Models = {
+  'neural' : adict(
+      # new models train from this date 
+      # train data in batches, something can do with neural networks
+      train_in_batches = True,
+      history_size =  500,
+      load_model_fn = tf.keras.models.load_model,
+      save_model_fn = lambda model, model_path: model.save(model_path),
+      step = 1,
+      batch_size = 200,
+      lahead = 12,
+      Type='neural',
+      train_size = 3000,
+      prediction_data_size = 1500,
+      feature_size = -1
+
+  ),
+  'trade' : adict(
+    Type='trade',
+    load_model_fn = lambda model_path: pickle.load(open(model_path, 'rb')),
+    save_model_fn = lambda model, model_path: pickle.dump(model, open(model_path, 'wb')),
+    prediction_data_size = 1500,
+    lahead = 12,
+    feature_size = 80,
+    train_size = 10000,
+  ),
+'trade2' : adict(
+    Type='trade',
+    load_model_fn = lambda model_path: pickle.load(open(model_path, 'rb')),
+    save_model_fn = lambda model, model_path: pickle.dump(model, open(model_path, 'wb')),
+    prediction_data_size = 1500,
+    lahead = 12,
+    feature_size = 80,
+    train_size = 10000,
+  ),
+  'arbitrage' : adict(
+    Type='arbitrage',
+    load_model_fn = lambda model_path: pickle.load(open(model_path, 'rb')),
+    save_model_fn = lambda model, model_path: pickle.dump(model, open(model_path, 'wb')),
+    prediction_data_size = 1500,
+    lahead = 1,
+    feature_size = 80,
+    train_size = 10000,
+  )
+}
+
+def get_latest_prediction(exchange_id, trading_pair, model):
+    """Get timestamp for latest prediction"""
+    q = """select "timestamp" from predictions 
+           where trading_pair=%(trading_pair)s and exchange=%(exchange)s and 
+                 model_type=%(model_type)s and period=%(period)s
+           order by timestamp desc 
+           limit 1;"""
+    return sql.safe_q1(q, dict(trading_pair=trading_pair, exchange=exchange_id, 
+                       model_type=model.Type, period=300))
+
+def get_model_path(model, exchange_id, trading_pair):
+    if model.Type == 'neural':
+        return aws.get_path('models', model.Type, exchange_id, trading_pair, '.h5')
+    elif model.Type == 'arbitrage' or model.Type == 'trade':
+        return aws.get_path('models', model.Type, exchange_id, trading_pair, '.pkl')
+
+
+# TODO get rid of train_size, add back start, don't have historical fail if there is little
+# data available... maybe
+# start should be based on the number of candles to pull
+def train(model_name):
     init()
-​
+    Model = Models.get(model_name)
+    assert Model is not None
     now = int(time.time())
-    pull_size = 5000
-​
-    # h.live_update()
-​
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        print(exchange_id, trading_pair)
-        # Loop until training on all the data want to train on or
-        # if there is an error don't train
-        start = int(now - params['ncandles'] * params['period'])
-        # time_counter is used for batch processing
-        time_counter = start
-        while True:
-            gc.collect()
-            model_path = aws.get_path('models', 'neural', exchange_id,
-                                      trading_pair, '.h5')
-​
-            # model = tf.keras.load_model(path)
-​
-            n = params['train_size']
-​
-            # train in batches of 3000
-​
-            df, dataset = h.get_data(
-                              exchange_id, trading_pair,
-                              params['period'],
-                              start=time_counter,
-                              n=3000)
-​
-            if df is None:
-                break
-​
-            print(df)
-​
-            time_counter = int(df.timestamp[-1])
-​
-            # finished training for this
-            if time_counter >= now - params['period']:
-                print('Finished training for {api}, {exchange_id}, '
-                      '{trading_pair}')
-                break
-​
-            if df.shape[0] < params['history_size']:
-                break
-​
-            target = df.columns.get_loc('close')
-​
-            print(n)
-            print(df.shape, dataset.shape)
-​
-            # Get the data in the same format that the
-            # model expects for its training
-            x_train, y_train, x_val, y_val = dw.windowed(
-                dataset,
-                target,
-                params['batch_size'],
-                params['history_size'],
-                params['step'],
-                lahead=params['lahead'],
-                ratio=0.8)
-​
-            print(x_train.shape)
-            print(y_train.shape)
-            print(x_val.shape)
-            print(y_val.shape)
-            if x_train.shape[0] < 10:
-                print(f'Invalid shape {x_train.shape[0]} '
-                      'in function cron_train')
-                break
-​
-            # Create a model if not exists, else load model if it
-            # not loaded
-            model = None
-            if not os.path.exists(model_path):
-                model = mfw.create_model(x_train, params)
-            # elif is for retraining for models
-            elif model is None:
-                model = tf.keras.models.load_model(model_path)
-​
-            # fit the model
-            model = mfw.fit_model(model, x_train, y_train, x_val, y_val)
-            print(f'Saved model {model_path}')
-            model.save(model_path)
-            # Upload file to s3
-            aws.upload_file(model_path)
-​
-​
-def cron_pred():
-    """
-    - Loads model for the given unique trading pair, gets the latest data
-    availble for that trading pair complete with
-    """
+        gc.collect()
+        start = None
+        train_in_batches = Model.get('train_in_batches')
+        if train_in_batches==True:
+            start = latest
+        else:
+            start = now - Model.train_size * period
+
+        print('-'*20)
+        print(exchange_id, trading_pair, start)
+
+        latest = get_latest_prediction(exchange_id, trading_pair, Model)
+    
+        n = Model.train_size
+
+        # Get the X and y data needed for training the model
+        df, X, y = (h.get_data(exchange_id,
+                       trading_pair,
+                       start=start,
+                       period=period,
+                       Model=Model,
+                       n=n))
+Wow that's super interesting with Lathe. One of my favorite things about
+Clojure is the runtime polymorphism it has along with functions like reify
+and extend-type. core.matrix library for example has multiple java vector 
+libraries you can use which would be like being able to swap out numpy 
+with another library yourself even and it still have the same interface. 
+
+
+        if df is None:
+           print(f'dataframe was null {exchange_id} {trading_pair} {start} {n}')
+           continue
+
+        if Model.Type == 'trade' or Model.Type == 'arbitrage':
+            # For training, the last points will not have a y labels
+            # available for them (because they reference future values),
+            # so truncatet he X set to be the same size as y
+            X = X[:len(y)]
+
+        if Model.Type == 'neural' and df.shape[0] < Model.get('history_size'):
+            print(f'Available history size was too small to train {exchange_id} {trading_pair} {df.shape[0]}')
+            continue
+
+        print('df shape', df.shape)
+        print('X shape', X.shape)
+        print('y shape', y.shape)
+
+        model = None
+        model_path = get_model_path(Model, exchange_id, trading_pair)
+
+
+        # Try loading the model if it has no predictions yet or it's set to train in batches
+        if latest is not None and train_in_batches==True:
+            try:
+                aws.download_file(model_path)
+                model = Model.load_model_fn(model_path)
+            except Exception as e:
+                print(f'Error {e}')
+                print(f'Model not available for {exchange_id}, {trading_pair}')
+
+        # Otherwise, create a new model
+        # TODO put into function for model to avoid if statement
+        else:
+            if Model.Type == 'neural':
+                model = mfw.create_model(X, Model)
+            elif Model.Type == 'trade':
+                model = xtrade.create_model()
+            elif Model.Type == 'arbitrage':
+                model = xarb.create_model()
+
+        # Fit the model
+        # TODO put into function for model to avoid if statement
+        if Model.Type == 'neural':
+            model = mfw.fit_model(model, X, y)
+        elif Model.Type == 'trade':
+            model = xtrade.fit_model(model, X, y)
+        elif Model.Type == 'arbitrage':
+            model = xarb.fit_model(model, X, y)
+
+        # Save and the upload model
+        Model.save_model_fn(model, model_path)
+        aws.upload_file(model_path)
+
+
+def pred(model_name):
     init()
-    all_preds = pd.DataFrame(columns=['close', 'api', 'trading_pair',
-                                      'exchange_id', 'timestamp'])
-    model_type = 'neural'
-​
+    Model = Models.get(model_name)
+    assert Model is not None
+    now = int(time.time())
     for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        model_path = aws.get_path('models', model_type, exchange_id,
-                                  trading_pair, '.h5')
+        gc.collect()
+        # set the start time
+        n = Model.prediction_data_size
+        start = now - Model.train_size * period
+
+        print(exchange_id, trading_pair, start)
+
+
+        # Get the X and y data needed for training the model
+        df, X, y = (h.get_data(exchange_id,
+                       trading_pair,
+                       period=period,
+                       Model=Model,
+                       start=start,
+                       n=n))
+        if df is None:
+            print(f'dataframe was empty {exchange_id} {trading_pair} {start} {n}')
+            continue
+        elif df.shape[0] < Model.prediction_data_size:
+            print(f'dataframe was small {df.shape} Expected at least {Model.prediction_data_size} {exchange_id} {trading_pair} {start} {n}')
+            continue
+
+        if Model.Type == 'neural' and df.shape[0] < Model.get('history_size'):
+            print(f'Available history size was too small too predict on {exchange_id} {trading_pair} {df.shape[0]}')
+            continue
+
+        print('df shape', df.shape)
+        print('X shape', X.shape)
+
+        model = None
+        model_path = get_model_path(Model, exchange_id, trading_pair)
+
+        print(model_path)
+
+        # Try loading the model if it has no predictions yet or it's set to train in batches
         try:
             aws.download_file(model_path)
-        except Exception:
+            model = Model.load_model_fn(model_path)
+        except Exception as e:
+            print(f'Error {e}')
             print(f'Model not available for {exchange_id}, {trading_pair}')
-        if not os.path.exists(model_path):
-            print(f'Model not available for {exchange_id}, {trading_pair}')
             continue
-​
-        model = tf.keras.models.load_model(model_path)
-​
-        n = params['history_size']+params['lahead']
-​
-        df, dataset = h.get_latest_data(
-                          exchange_id, trading_pair,
-                          params['period'],
-                          # Pull history_size + lahead length,
-                          # shouldn't need more to make a prediction
-                          n=15000)
-​
-        if df is None:
-            continue
-​
-        target = df.columns.get_loc('close')
-​
-        print(dataset.shape)
-​
-        # Get the data in the same format that the
-        # model expects for its training
-        x_train, y_train, x_val, y_val = dw.windowed(
-            dataset, target,
-            params['batch_size'],
-            params['history_size'],
-            params['step'],
-            # Zero look ahead, don't truncate any data for the prediction
-            lahead=0,
-            ratio=1.0)
-​
-        if x_train.shape[0] < (params['history_size']+params['step']):
-            print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
-            continue
-​
-        preds = model.predict(x_train)[:, 0][-params['lahead']:]
-​
-        last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + params['period']
-                      * i for i in range(len(preds))]
-​
+
+        # Fit the model
+        preds = None
+        timestamps = None
+
+        # TODO put into function for model to avoid if statement
+        if Model.Type == 'neural':
+            preds = model.predict(X)[:, 0][-Model.lahead:]
+            timestamps = [df.timestamp[i] + Model.lahead * period for i in range(len(preds))]
+
+        elif Model.Type == 'trade':
+            preds = model.predict(X)
+            timestamps = [df.timestamp[i] + Model.lahead * period for i in range(len(preds))]
+
+        elif Model.Type == 'arbitrage':
+            preds = model.predict(X)
+            timestamps = [df.timestamp[i] + Model.lahead * period for i in range(len(preds))]
+
+        # Insert predictions in database
         preds = pd.DataFrame(
             {'prediction': preds,
              'exchange': exchange_id,
              'timestamp':  timestamps,
              'trading_pair': trading_pair,
-             'period': params['period'],
-             'model_type': model_type
-             })
-        sql.add_data_to_table(preds, table='predictions')
-        preds_path = aws.get_path('preds', model_type, exchange_id,
-                                  trading_pair, '.csv')
-        preds.to_csv(preds_path)
-        aws.upload_file(preds_path)
-​
-​
-# be able to have model train on a large series of time without crashing
-# split data into smaller batches
-​
-​
-def xgb_cron_train(model_type):
-​
-    # Initialize the function and pull info from the .env file
-    init()
-​
-    # Find the current time
-    now = int(time.time())
-    pull_size = 5000
-​
-    # Check for missing data, pull data from APIs if data is missing
-    # h.live_update()
-    target = None
-​
-    # Check for every unqiue trading pair in each exchange
-    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        print('-'*15)
-        print(exchange_id, trading_pair)
-        print('-'*15)
-        # Loop until training on all the data want to train on or
-        # if there is an error don't train
-        start = int(now - params['ncandles'] * params['period'])
-        time_counter = start
-​
-        gc.collect()
-        model_path = aws.get_path(
-            'models', model_type, exchange_id, trading_pair, '.pkl')
-​
-        n = params['train_size']
-​
-        # train in batches of 3000
-        df, dataset = h.get_latest_data(
-                            exchange_id,
-                            trading_pair,
-                            params['period'],
-                            n=3000)
-​
-        if df is None:
-            continue
-​
-        if model_type == 'trade':
-            target = df.columns.get_loc('price_increased')
-        elif model_type == 'arbitrage':
-            target = df.columns.get_loc('arb_signal_class')
-​
-        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
-​
-        print(df)
-        print(n)
-        print(df.shape, dataset.shape)
-​
-        # Find the x and y train and test data
-​
-        # Create a model if not exists, else load model if it
-        # not loaded
-        model = None
-        # TODO remove comment on below to restory functionality
-        # beyond testing enviornments
-        # if not os.path.exists(model_path):
-        if True:
-            if model_type == 'trade':
-                model = xtrade.create_model()
-            elif model_type == 'arbitrage':
-                model = xarb.create_model()
-​
-        # fit the model
-        model = xtrade.fit_model(model, x_train, y_train)
-        print(f'Saved model {model_path}')
-        # model.save(model_path)
-        pickle.dump(model, open(model_path, 'wb'))
-        # Upload file to s3
-        aws.upload_file(model_path)
-​
-​
-# be able to have model train on a large series of time without crashing
-# split data into smaller batches
-def xgb_cron_pred(model_type='trade'):
-    """
-    - Loads model for the given unique trading pair, gets the latest data
-    availble for that trading pair complete with
-    """
-    init()
-    for exchange_id, trading_pair in h.yield_unique_pair(return_api=False):
-        print(exchange_id, trading_pair)
-​
-        model_path = aws.get_path(
-            'models', model_type, exchange_id, trading_pair, '.pkl'
-            )
-​
-        aws.download_file(model_path)
-        if not os.path.exists(model_path):
-            print(f'File does not exist for {exchange_id}, {trading_pair} '
-                  'in function xgb_cron_pred')
-        print(model_path)
-        model = pickle.load(open(model_path, 'rb'))
-​
-        n = params['history_size']+params['lahead']
-​
-        df, dataset = h.get_latest_data(
-                          exchange_id,
-                          trading_pair,
-                          params['period'],
-                          n=n)
-​
-        if df is None:
-            continue
-​
-        target = df.columns.get_loc('close')
-​
-        print(dataset.shape)
-​
-        x_train, y_train, x_test, y_test = xtrade.data_splice(dataset, target)
-    #    if x_train.shape[0] < n:
-    #        print(f'Invalid shape {x_train.shape[0]} in function cron_pred2')
-    #        continue
-​
-        preds = model.predict(x_train)
-​
-        last_timestamp = df.timestamp[-1]
-        timestamps = [last_timestamp + params['period']
-                      * i for i in range(len(preds))]
-​
-        preds = pd.DataFrame(
-            {'prediction': preds,
-             'exchange': exchange_id,
-             'timestamp':  timestamps,
-             'trading_pair': trading_pair,
-             'period': params['period'],
-             'model_type': model_type
-             })
-        sql.add_data_to_table(preds, table='predictions')
+             'period': period,
+             'model_type': Model.Type})
+
+        sql.upsert(preds, 'predictions')

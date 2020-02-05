@@ -22,7 +22,7 @@ def start_logging():
     logging.debug('-'*w) 
 
 def init():
-    load_dotenv(verbose=True)
+    load_dotenv(verbose=True, override=True)
     start_logging()
     cryptolytic.session = boto3.session.Session(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], 
                                         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
